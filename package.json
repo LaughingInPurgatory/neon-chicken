@@ -1,0 +1,9 @@
+{
+  "name": "joust-neon-edition",
+  "version": "1.0.0",
+  "description": "Single-file web Joust with neon effects, power-ups, and a flat-file high score table",
+  "main": "joust.js",
+  "scripts": {
+    "start": "node joust.js"
+  }
+}

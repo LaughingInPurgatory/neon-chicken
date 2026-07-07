@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "joust",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["joust.js"],
+      "port": 8022
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+# JOUST — Neon Edition
+
+A modern, single-file web remake of the 1982 Atari arcade classic **Joust**. Flap your neon mount to gain height, ram enemy riders from above to unhorse them, collect the eggs they drop before they hatch, and survive wave after wave over a sea of lava.
+
+No build step, no dependencies, no frameworks — just Node and a browser.
+
+## Play
+
+```
+node joust.js
+```
+
+Then open **http://localhost:8022**.
+
+Override the port with an environment variable:
+
+```
+PORT=9000 node joust.js
+```
+
+(`npm start` runs the same thing.)
+
+## Controls
+
+| Action | Keyboard | Gamepad |
+| --- | --- | --- |
+| Move | Arrow keys or `A` / `D` | Left stick / D-pad |
+| Flap | `Space`, `↑`, or `W` | `A` (button 0) |
+| Start / Confirm | `Enter` | `Start` |
+| Pause | `P` | `Start` |
+| Mute | `M` | — |
+
+Flapping is a tap, not a hold — each press gives one upward beat, and gravity is always pulling you down. Gamepads are hot-pluggable.
+
+## How to play
+
+- **Jousting:** when you collide with an enemy, whoever's rider is *higher* wins. Hit them from above to defeat them; get hit from above and you lose a life. Equal height bounces both riders apart.
+- **Eggs:** a defeated rider drops an egg. Grab it for bonus points (worth more in a streak) — but if you leave it too long it hatches into a faster, tougher rider.
+- **Waves:** wave 1 has 2 enemies, and each wave adds one more. A wave ends only when every enemy *and* every unhatched egg is gone.
+- **Lava:** the bottom of the arena is deadly. Fly too low and the lava troll's hand may grab you — mash flap to break free.
+- **Lives:** you start with 5, and earn an extra life every 20,000 points.
+
+## Power-ups
+
+Dropped by defeated enemies or floating in ambiently. Active effects show as ring timers in the HUD.
+
+| Power-up | Effect |
+| --- | --- |
+| 🛡 Shield | Temporary invulnerability — enemies you touch are defeated |
+| ⚡ Turbo | Faster acceleration and stronger flaps |
+| ⏳ Chrono | Slows down enemies and eggs |
+| ✕2 Double | Double points |
+| ♥ Life | +1 life |
+
+## High scores
+
+Beat the tenth-place score and you'll enter your three initials on the game-over screen (type them, or cycle letters with the D-pad). The top 10 are saved to a plain-text file, `scores.txt`, next to `joust.js` — one `NAME SCORE DATE` entry per line. Delete that file to reset the leaderboard.
+
+## Features
+
+- Faithful Joust flap physics, height-based combat, and eggs
+- Three enemy tiers with escalating aggression, plus a lava troll
+- Five power-ups
+- All-procedural neon visuals: glowing sprites, particle effects, screen shake, parallax background, bubbling lava, CRT scanlines
+- Runtime-synthesized sound and music via the Web Audio API (no audio files)
+- Keyboard **and** gamepad support throughout
+
+## Requirements
+
+Node.js (any modern version) and a browser with Canvas, Web Audio, and — optionally — Gamepad API support. No `npm install` needed; there are no dependencies.
+
+## Project layout
+
+The whole game — HTTP server, HTML, CSS, and gameplay — lives in the single file **`joust.js`** by design. The only other file created at runtime is `scores.txt`. See [CLAUDE.md](CLAUDE.md) for architecture notes.
