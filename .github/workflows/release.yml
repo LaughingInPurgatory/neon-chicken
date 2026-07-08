@@ -35,8 +35,16 @@ jobs:
         # Signing is automatic when the relevant secrets are configured:
         #   macOS:   CSC_LINK / CSC_KEY_PASSWORD (+ notarize: APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID)
         #   Windows: CSC_LINK / CSC_KEY_PASSWORD
-        # Absent them the apps build unsigned.
-        run: npx electron-builder --publish never
+        # Absent them the apps build unsigned. An empty CSC_LINK must be cleared,
+        # or electron-builder tries (and fails) to sign macOS with a missing cert.
+        shell: bash
+        run: |
+          if [ -z "$CSC_LINK" ]; then
+            echo "No signing certificate — building unsigned."
+            unset CSC_LINK CSC_KEY_PASSWORD
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+          fi
+          npx electron-builder --publish never
         env:
           GH_TOKEN: ${{ github.token }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
