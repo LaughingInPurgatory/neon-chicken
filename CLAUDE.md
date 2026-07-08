@@ -29,6 +29,8 @@ There is no test suite and no linter. Verify changes by running the server and d
 
 This is the one sanctioned exception to "no build tool": the tooling lives only in `package.json` devDependencies and produces `dist/` artifacts — `joust.js` itself stays a single file and still runs directly with `node joust.js`.
 
+`.github/workflows/release.yml` runs this build on `v*` tags (on a macOS runner, for the Apple signing toolchain) and publishes the archives to a GitHub Release. Helper scripts in `.github/scripts/` package the binaries and do optional code-signing/notarization that no-ops unless the signing secrets are set (see the README's "Automated releases" table). `dist/`, `release/`, and `node_modules/` are gitignored.
+
 `.claude/launch.json` defines a `joust` server config for the preview tooling (`preview_start` name `joust`, port 8022). Keep its port in sync with the `PORT` default in `joust.js` when changing ports.
 
 ## Architecture

@@ -4,6 +4,7 @@ scores.txt
 # Packaging
 node_modules/
 dist/
+release/
 
 # OS cruft
 .DS_Store

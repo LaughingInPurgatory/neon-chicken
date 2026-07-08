@@ -1,0 +1,72 @@
+name: Build & Release
+
+# Cut a release by pushing a version tag:
+#   git tag v1.0.0 && git push origin v1.0.0
+# Or run manually from the Actions tab (builds artifacts without publishing).
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    # Runs on macOS so the mac binaries can be codesigned/notarized with the
+    # native Apple toolchain. @yao-pkg/pkg cross-compiles every target from here.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build executables (macOS/Windows/Linux)
+        run: npm run build
+
+      - name: Sign macOS binaries (optional — needs signing secrets)
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: bash .github/scripts/sign-macos.sh
+
+      - name: Sign Windows binaries (optional — needs signing secrets)
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PWD: ${{ secrets.WINDOWS_CERTIFICATE_PWD }}
+        run: bash .github/scripts/sign-windows.sh
+
+      - name: Package archives + checksums
+        run: bash .github/scripts/package.sh
+
+      - name: Notarize macOS archives (optional — needs Apple credentials)
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: bash .github/scripts/notarize-macos.sh
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: joust-binaries
+          path: release/
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "${GITHUB_REF_NAME}"
+          release/*
+          --title "JOUST — Neon Edition ${GITHUB_REF_NAME}"
+          --generate-notes

@@ -86,6 +86,25 @@ This produces, in `dist/`:
 
 Run a binary and it starts the same local server (`PORT=... ` still works). Each executable writes its `scores.txt` **next to the binary**, so keep it in a writable folder. First run of `npm run build` downloads the base Node runtimes it embeds, so it needs network access and takes a minute; later builds are cached.
 
+### Automated releases
+
+Pushing a version tag builds all five binaries in CI and publishes them (zipped, with `SHA256SUMS.txt`) to a GitHub Release:
+
+```
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The workflow ([.github/workflows/release.yml](.github/workflows/release.yml)) also runs from the Actions tab on demand (building artifacts without publishing).
+
+**Code signing is optional.** With no secrets configured, the binaries are unsigned/ad-hoc — they run locally but trip Gatekeeper (macOS) and SmartScreen (Windows) on *other* machines. To ship signed, notarized binaries, add these repository secrets and the workflow signs automatically:
+
+| Secret | Purpose |
+| --- | --- |
+| `MACOS_CERTIFICATE`, `MACOS_CERTIFICATE_PWD`, `MACOS_SIGN_IDENTITY` | base64 Developer ID `.p12`, its password, and the identity name — signs the macOS binaries |
+| `APPLE_ID`, `APPLE_APP_PASSWORD`, `APPLE_TEAM_ID` | Apple ID, app-specific password, Team ID — notarizes the macOS archives |
+| `WINDOWS_CERTIFICATE`, `WINDOWS_CERTIFICATE_PWD` | base64 code-signing `.pfx` and its password — Authenticode-signs the `.exe` files |
+
 ## Requirements
 
 To run from source: Node.js (any modern version) and a browser with Canvas, Web Audio, and — optionally — Gamepad API support. No `npm install` needed to *play* from source; the dependency above is only for building the standalone executables.
