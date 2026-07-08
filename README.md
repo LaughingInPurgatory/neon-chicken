@@ -65,9 +65,30 @@ Beat the tenth-place score and you'll enter your three initials on the game-over
 - Runtime-synthesized sound and music via the Web Audio API (no audio files)
 - Keyboard **and** gamepad support throughout
 
+## Standalone executables
+
+You can bundle the game into a self-contained native executable that needs no installed Node — just double-click (or run) the file and open the printed URL.
+
+```
+npm install      # one-time: fetches the bundler (@yao-pkg/pkg)
+npm run build    # writes binaries to dist/
+```
+
+This produces, in `dist/`:
+
+| File | Platform |
+| --- | --- |
+| `joust-neon-edition-macos-arm64` | macOS (Apple Silicon) |
+| `joust-neon-edition-macos-x64` | macOS (Intel) |
+| `joust-neon-edition-win-x64.exe` | Windows (x64) |
+| `joust-neon-edition-win-arm64.exe` | Windows (ARM) |
+| `joust-neon-edition-linux-x64` | Linux (x64) |
+
+Run a binary and it starts the same local server (`PORT=... ` still works). Each executable writes its `scores.txt` **next to the binary**, so keep it in a writable folder. First run of `npm run build` downloads the base Node runtimes it embeds, so it needs network access and takes a minute; later builds are cached.
+
 ## Requirements
 
-Node.js (any modern version) and a browser with Canvas, Web Audio, and — optionally — Gamepad API support. No `npm install` needed; there are no dependencies.
+To run from source: Node.js (any modern version) and a browser with Canvas, Web Audio, and — optionally — Gamepad API support. No `npm install` needed to *play* from source; the dependency above is only for building the standalone executables.
 
 ## Project layout
 

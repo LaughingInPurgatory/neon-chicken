@@ -20,6 +20,15 @@ npm start                # same as node joust.js
 
 There is no test suite and no linter. Verify changes by running the server and driving the game in a browser. `node --check joust.js` is a fast syntax gate before starting the server.
 
+### Packaging to native executables
+
+`npm run build` bundles `joust.js` into standalone binaries in `dist/` (macOS arm64/x64, Windows x64/arm64, Linux x64) via `@yao-pkg/pkg`. Two constraints are load-bearing and must be preserved:
+
+- **`--no-bytecode --public` (in the `build` script) are mandatory.** The served page is built from `GAME.toString()`; if pkg compiles to V8 bytecode, `toString()` returns `[native code]` and the game breaks. Those flags keep the real source in the bundle.
+- **Score DB path.** When bundled, `__dirname` is a read-only virtual FS, so `joust.js` detects the bundle (`process.pkg` or `node:sea` `isSea()`) and writes `scores.txt` next to `process.execPath` instead. Preserve the `BUNDLED`/`DATA_DIR` logic near the top when touching score storage.
+
+This is the one sanctioned exception to "no build tool": the tooling lives only in `package.json` devDependencies and produces `dist/` artifacts — `joust.js` itself stays a single file and still runs directly with `node joust.js`.
+
 `.claude/launch.json` defines a `joust` server config for the preview tooling (`preview_start` name `joust`, port 8022). Keep its port in sync with the `PORT` default in `joust.js` when changing ports.
 
 ## Architecture

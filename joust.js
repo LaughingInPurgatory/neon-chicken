@@ -14,7 +14,15 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const PORT = Number(process.env.PORT) || 8022;
-const SCORES_FILE = path.join(__dirname, 'scores.txt');
+// When bundled into a standalone executable (pkg or Node SEA), __dirname points
+// inside a read-only virtual filesystem, so keep the score DB next to the actual
+// binary instead. Falls back to the source directory when run with `node`.
+const BUNDLED = (function () {
+  if (process.pkg) return true;
+  try { return require('node:sea').isSea(); } catch (e) { return false; }
+})();
+const DATA_DIR = BUNDLED ? path.dirname(process.execPath) : __dirname;
+const SCORES_FILE = path.join(DATA_DIR, 'scores.txt');
 const MAX_SCORES = 10;
 
 /* ==================== flat-file high score DB ==================== */
