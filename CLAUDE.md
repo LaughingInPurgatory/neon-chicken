@@ -37,7 +37,7 @@ This is the one sanctioned exception to "no build tool": the tooling lives only 
 
 `joust.js` has two halves that run in **different JavaScript environments**, which is the key thing to understand:
 
-1. **Server half (Node).** Top-level code: the flat-file score DB (`loadScores`/`saveScores`/`addScore`), the `http` server, and route handlers for `/` (serves the page), `GET /api/scores`, and `POST /api/scores`.
+1. **Server half (Node).** Top-level code: the flat-file score DB (`loadScores`/`saveScores`/`addScore`), the `http` server, route handlers for `/` (serves the page), `GET /api/scores`, and `POST /api/scores`, and the **desktop-window launcher**. After the server binds (with an EADDRINUSE fallback to a free port), `launchWindow` spawns an installed Chromium browser (`findBrowser`) in `--app` mode against a throwaway `--user-data-dir`, so the child process's lifetime tracks the window and its exit quits the app; with no Chromium it falls back to opening the default browser. This auto-launch runs only for the bundled binary (or `--window`/`JOUST_WINDOW=1`); plain `node joust.js` stays server-only so preview/headless use is unaffected. Flags: `--server`/`--window`/`--fullscreen` and env `JOUST_NO_WINDOW`/`JOUST_WINDOW`/`JOUST_FULLSCREEN`/`JOUST_BROWSER`. Note `argv` is offset by `BUNDLED` since a packaged binary has no script-path argv entry.
 
 2. **Game half (browser).** One big function, `GAME()`. It is **not called in Node** — it is serialized with `GAME.toString()` and injected into the served HTML via the `PAGE` template literal: `(${GAME.toString()})()`. So `GAME` runs only in the browser, and must be fully self-contained: it cannot reference any server-scope variable or Node API. Everything the browser needs is defined inside `GAME`.
 

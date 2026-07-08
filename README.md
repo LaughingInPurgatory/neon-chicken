@@ -6,6 +6,10 @@ No build step, no dependencies, no frameworks — just Node and a browser.
 
 ## Play
 
+The easiest way is a [standalone executable](#standalone-executables) — double-click it and the game opens in its own window, no browser or URL needed.
+
+From source, run the server and open it in a browser:
+
 ```
 node joust.js
 ```
@@ -18,7 +22,7 @@ Override the port with an environment variable:
 PORT=9000 node joust.js
 ```
 
-(`npm start` runs the same thing.)
+(`npm start` runs the same thing.) To get the self-contained app window from source too, add `--window` (`node joust.js --window`).
 
 ## Controls
 
@@ -67,7 +71,9 @@ Beat the tenth-place score and you'll enter your three initials on the game-over
 
 ## Standalone executables
 
-You can bundle the game into a self-contained native executable that needs no installed Node — just double-click (or run) the file and open the printed URL.
+You can bundle the game into a self-contained native executable that needs no installed Node — just double-click (or run) it and the game **opens in its own window**. Closing the window quits the app.
+
+The window uses whatever Chromium-based browser you already have (Microsoft Edge, Chrome, Brave, or Chromium) in a chromeless "app" mode. Windows always has Edge, so it works out of the box; on a machine with no Chromium browser it falls back to opening your default browser and prints the URL.
 
 ```
 npm install      # one-time: fetches the bundler (@yao-pkg/pkg)
@@ -84,7 +90,19 @@ This produces, in `dist/`:
 | `joust-neon-edition-win-arm64.exe` | Windows (ARM) |
 | `joust-neon-edition-linux-x64` | Linux (x64) |
 
-Run a binary and it starts the same local server (`PORT=... ` still works). Each executable writes its `scores.txt` **next to the binary**, so keep it in a writable folder. First run of `npm run build` downloads the base Node runtimes it embeds, so it needs network access and takes a minute; later builds are cached.
+Each executable writes its `scores.txt` **next to the binary**, so keep it in a writable folder. First run of `npm run build` downloads the base Node runtimes it embeds, so it needs network access and takes a minute; later builds are cached.
+
+#### Runtime options
+
+Flags (or environment variables) control the window behavior of any build or `node joust.js`:
+
+| Flag | Env | Effect |
+| --- | --- | --- |
+| `--window` | `JOUST_WINDOW=1` | Open the app window (default for a packaged binary; off for `node joust.js`) |
+| `--server` | `JOUST_NO_WINDOW=1` | Server only — don't open a window (useful for remote/headless play) |
+| `--fullscreen` | `JOUST_FULLSCREEN=1` | Launch the window fullscreen |
+| — | `PORT=9000` | Serve on a specific port (auto-falls back to a free port if it's busy) |
+| — | `JOUST_BROWSER=/path/to/browser` | Use a specific Chromium browser instead of auto-detecting |
 
 ### Automated releases
 

@@ -12,6 +12,8 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
+const { spawn, spawnSync } = require('node:child_process');
 
 const PORT = Number(process.env.PORT) || 8022;
 // When bundled into a standalone executable (pkg or Node SEA), __dirname points
@@ -1544,8 +1546,136 @@ const server = http.createServer(async (req, res) => {
   res.end('not found');
 });
 
-server.listen(PORT, () => {
+/* ==================== desktop app window ==================== */
+/* Instead of making the player open a browser and type in a URL, the packaged
+ * executable pops open its own chromeless window using whatever Chromium-based
+ * browser (Edge/Chrome/Brave/Chromium) is already installed, in "--app" mode.
+ * Closing that window quits the process. With no Chromium found we fall back to
+ * opening the default browser and leaving the server running.
+ *
+ * Auto-launch happens for the bundled binary (or when forced with --window /
+ * JOUST_WINDOW=1). Plain `node joust.js` stays server-only so dev/preview and
+ * headless use are unaffected. Disable with --server or JOUST_NO_WINDOW=1. */
+const argv = process.argv.slice(BUNDLED ? 1 : 2);
+function hasFlag(f) { return argv.indexOf(f) >= 0; }
+function envOn(name) { var v = process.env[name]; return v === '1' || v === 'true'; }
+
+const WANT_WINDOW =
+  !hasFlag('--server') && !envOn('JOUST_NO_WINDOW') &&
+  (BUNDLED || hasFlag('--window') || envOn('JOUST_WINDOW'));
+const WANT_FULLSCREEN = hasFlag('--fullscreen') || envOn('JOUST_FULLSCREEN');
+
+function findBrowser() {
+  // explicit override wins (e.g. a browser in a nonstandard location)
+  const override = process.env.JOUST_BROWSER;
+  if (override) { try { if (fs.existsSync(override)) return override; } catch (e) {} }
+  const plat = process.platform;
+  if (plat === 'darwin') {
+    const apps = [
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+      '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+      '/Applications/Chromium.app/Contents/MacOS/Chromium'
+    ];
+    for (const a of apps) { try { if (fs.existsSync(a)) return a; } catch (e) {} }
+    return null;
+  }
+  if (plat === 'win32') {
+    const bases = [process.env['LOCALAPPDATA'], process.env['PROGRAMFILES'], process.env['PROGRAMFILES(X86)']].filter(Boolean);
+    const rels = [
+      'Google\\Chrome\\Application\\chrome.exe',
+      'Microsoft\\Edge\\Application\\msedge.exe',
+      'BraveSoftware\\Brave-Browser\\Application\\brave.exe',
+      'Chromium\\Application\\chrome.exe'
+    ];
+    for (const b of bases) for (const r of rels) {
+      const p = path.join(b, r);
+      try { if (fs.existsSync(p)) return p; } catch (e) {}
+    }
+    return null;
+  }
+  // linux: resolve well-known names on PATH
+  const names = ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'microsoft-edge', 'brave-browser'];
+  for (const n of names) {
+    try { if (spawnSync('which', [n], { stdio: 'ignore' }).status === 0) return n; } catch (e) {}
+  }
+  return null;
+}
+
+function openDefaultBrowser(url) {
+  try {
+    if (process.platform === 'darwin') spawn('open', [url], { stdio: 'ignore', detached: true }).unref();
+    else if (process.platform === 'win32') spawn('cmd', ['/c', 'start', '', url], { stdio: 'ignore', detached: true }).unref();
+    else spawn('xdg-open', [url], { stdio: 'ignore', detached: true }).unref();
+  } catch (e) { /* nothing we can do — the URL is printed for the user */ }
+}
+
+function launchWindow(url) {
+  const browser = findBrowser();
+  if (!browser) {
+    console.log('  (no Chrome/Edge/Brave found — opening your default browser)');
+    openDefaultBrowser(url);
+    return;
+  }
+  // A dedicated temp profile forces a fresh, standalone browser process whose
+  // lifetime matches the window (so closing it reliably quits the game).
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'joust-'));
+  const args = [
+    '--app=' + url,
+    '--user-data-dir=' + profile,
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--new-window'
+  ];
+  if (WANT_FULLSCREEN) args.push('--start-fullscreen');
+  else args.push('--window-size=1024,700');
+
+  let child;
+  try {
+    child = spawn(browser, args, { stdio: 'ignore' });
+  } catch (e) {
+    console.log('  (could not launch ' + browser + ' — opening default browser)');
+    openDefaultBrowser(url);
+    return;
+  }
+  console.log('  window: launched (close it to quit)');
+  const cleanup = () => { try { fs.rmSync(profile, { recursive: true, force: true }); } catch (e) {} };
+  child.on('error', () => { cleanup(); openDefaultBrowser(url); });
+  child.on('exit', () => {
+    cleanup();
+    server.close(() => process.exit(0));
+    // hard stop in case a lingering connection keeps the server open
+    setTimeout(() => process.exit(0), 500).unref();
+  });
+  process.on('SIGINT', () => { try { child.kill(); } catch (e) {} cleanup(); process.exit(0); });
+}
+
+let started = false;
+function onListening() {
+  if (started) return; // guard against a retry leaving a stale 'listening' handler
+  started = true;
+  const url = 'http://localhost:' + server.address().port;
   console.log('JOUST — Neon Edition');
-  console.log('  play:   http://localhost:' + PORT);
+  console.log('  play:   ' + url);
   console.log('  scores: ' + SCORES_FILE);
-});
+  if (WANT_WINDOW) launchWindow(url);
+  else console.log('  (open the URL above to play — run with --window for an app window)');
+}
+
+// Bind the port; if it's taken, fall back to any free port so the app still
+// launches instead of crashing on EADDRINUSE.
+let triedFallback = false;
+function bind(port) {
+  server.once('error', (e) => {
+    if (e.code === 'EADDRINUSE' && !triedFallback) {
+      triedFallback = true;
+      console.warn('  port ' + port + ' is busy — using a free port instead');
+      bind(0);
+    } else {
+      console.error(e);
+      process.exit(1);
+    }
+  });
+  server.listen(port, onListening);
+}
+bind(PORT);
