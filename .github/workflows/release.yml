@@ -1,7 +1,7 @@
 name: Build & Release
 
 # Cut a release by pushing a version tag:
-#   git tag v1.0.0 && git push origin v1.0.0
+#   git tag v1.2.0 && git push origin v1.2.0
 # Or run manually from the Actions tab (builds artifacts without publishing).
 on:
   push:
@@ -13,58 +13,75 @@ permissions:
   contents: write
 
 jobs:
+  # Electron apps must be built on the target OS, so fan out across three runners.
   build:
-    # Runs on macOS so the mac binaries can be codesigned/notarized with the
-    # native Apple toolchain. @yao-pkg/pkg cross-compiles every target from here.
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build executables (macOS/Windows/Linux)
-        run: npm run build
-
-      - name: Sign macOS binaries (optional — needs signing secrets)
-        env:
-          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
-          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
-        run: bash .github/scripts/sign-macos.sh
-
-      - name: Sign Windows binaries (optional — needs signing secrets)
-        env:
-          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
-          WINDOWS_CERTIFICATE_PWD: ${{ secrets.WINDOWS_CERTIFICATE_PWD }}
-        run: bash .github/scripts/sign-windows.sh
-
-      - name: Package archives + checksums
-        run: bash .github/scripts/package.sh
-
-      - name: Notarize macOS archives (optional — needs Apple credentials)
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: bash .github/scripts/notarize-macos.sh
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: joust-binaries
-          path: release/
-          if-no-files-found: error
-
-      - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Build distributables (electron-builder)
+        # Signing is automatic when the relevant secrets are configured:
+        #   macOS:   CSC_LINK / CSC_KEY_PASSWORD (+ notarize: APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID)
+        #   Windows: CSC_LINK / CSC_KEY_PASSWORD
+        # Absent them the apps build unsigned.
+        run: npx electron-builder --publish never
         env:
           GH_TOKEN: ${{ github.token }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Collect user-facing artifacts
+        shell: bash
+        run: |
+          mkdir -p out
+          find dist -maxdepth 1 -type f \
+            \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' \
+               -o -name '*.AppImage' -o -name '*.tar.gz' \) \
+            -exec cp {} out/ \;
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.os }}
+          path: out/
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten + checksums
+        run: |
+          mkdir -p release
+          find artifacts -type f -exec cp {} release/ \;
+          cd release
+          sha256sum * > SHA256SUMS.txt
+          ls -lh
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: >
           gh release create "${GITHUB_REF_NAME}"
           release/*

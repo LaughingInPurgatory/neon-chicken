@@ -20,16 +20,18 @@ npm start                # same as node joust.js
 
 There is no test suite and no linter. Verify changes by running the server and driving the game in a browser. `node --check joust.js` is a fast syntax gate before starting the server.
 
-### Packaging to native executables
+### Packaging as an Electron desktop app
 
-`npm run build` bundles `joust.js` into standalone binaries in `dist/` (macOS arm64/x64, Windows x64/arm64, Linux x64) via `@yao-pkg/pkg`. Two constraints are load-bearing and must be preserved:
+The distributable is a self-contained Electron app (bundles its own Chromium). `npm run app` runs it; `npm run dist` packages installers/archives into `dist/` via `electron-builder` (config is the `build` field in `package.json`). Crucially, **there is no separate Electron main file** — `joust.js` *is* the Electron `main`. It detects the Electron runtime (`process.versions.electron`) and, in that branch, starts the same HTTP server on loopback and opens a `BrowserWindow` pointing at it (`openElectronWindow`); the served page and `/api/scores` are reused unchanged. This keeps the single-file rule intact.
 
-- **`--no-bytecode --public` (in the `build` script) are mandatory.** The served page is built from `GAME.toString()`; if pkg compiles to V8 bytecode, `toString()` returns `[native code]` and the game breaks. Those flags keep the real source in the bundle.
-- **Score DB path.** When bundled, `__dirname` is a read-only virtual FS, so `joust.js` detects the bundle (`process.pkg` or `node:sea` `isSea()`) and writes `scores.txt` next to `process.execPath` instead. Preserve the `BUNDLED`/`DATA_DIR` logic near the top when touching score storage.
+Load-bearing details when touching this:
+- **Score DB path (`DATA_DIR`).** The packaged app runs from a read-only asar, so under Electron `scores.txt` goes in `app.getPath('userData')`; a pkg/SEA binary would use the exe dir; `node joust.js` uses the source dir. Preserve the three-way `DATA_DIR` logic near the top.
+- **Runtime detection is by `process.versions.electron`**, not by requiring `electron` (which resolves to a path string outside the Electron runtime).
+- The old pkg/`--window` external-browser path still exists for `node joust.js --window` and is harmless, but the shipped product is the Electron app.
 
 This is the one sanctioned exception to "no build tool": the tooling lives only in `package.json` devDependencies and produces `dist/` artifacts — `joust.js` itself stays a single file and still runs directly with `node joust.js`.
 
-`.github/workflows/release.yml` runs this build on `v*` tags (on a macOS runner, for the Apple signing toolchain) and publishes the archives to a GitHub Release. Helper scripts in `.github/scripts/` package the binaries and do optional code-signing/notarization that no-ops unless the signing secrets are set (see the README's "Automated releases" table). `dist/`, `release/`, and `node_modules/` are gitignored.
+`.github/workflows/release.yml` builds the app on a macOS/Windows/Linux runner matrix on `v*` tags and publishes the artifacts (+ `SHA256SUMS.txt`) to a GitHub Release. electron-builder signs automatically if the signing secrets (`CSC_LINK`/`CSC_KEY_PASSWORD`, Apple notarization vars) are set; otherwise it builds unsigned. `dist/`, `release/`, and `node_modules/` are gitignored.
 
 `.claude/launch.json` defines a `joust` server config for the preview tooling (`preview_start` name `joust`, port 8022). Keep its port in sync with the `PORT` default in `joust.js` when changing ports.
 

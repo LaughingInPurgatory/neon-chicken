@@ -16,14 +16,22 @@ const os = require('node:os');
 const { spawn, spawnSync } = require('node:child_process');
 
 const PORT = Number(process.env.PORT) || 8022;
-// When bundled into a standalone executable (pkg or Node SEA), __dirname points
-// inside a read-only virtual filesystem, so keep the score DB next to the actual
-// binary instead. Falls back to the source directory when run with `node`.
+// Running as the Electron main process? (Electron sets process.versions.electron.)
+const IN_ELECTRON = !!(process.versions && process.versions.electron);
+// True when packed into a single-file CLI binary (pkg or Node SEA).
 const BUNDLED = (function () {
   if (process.pkg) return true;
   try { return require('node:sea').isSea(); } catch (e) { return false; }
 })();
-const DATA_DIR = BUNDLED ? path.dirname(process.execPath) : __dirname;
+// Where the plain-text score DB lives. It must be writable, so:
+//  - Electron app  -> the per-user app-data dir (the app itself is read-only asar)
+//  - pkg/SEA binary-> next to the executable (__dirname is a read-only virtual FS)
+//  - `node joust.js`-> the source directory
+const DATA_DIR = (function () {
+  if (IN_ELECTRON) return require('electron').app.getPath('userData');
+  if (BUNDLED) return path.dirname(process.execPath);
+  return __dirname;
+})();
 const SCORES_FILE = path.join(DATA_DIR, 'scores.txt');
 const MAX_SCORES = 10;
 
@@ -1650,20 +1658,46 @@ function launchWindow(url) {
   process.on('SIGINT', () => { try { child.kill(); } catch (e) {} cleanup(); process.exit(0); });
 }
 
+// Native desktop window when running under Electron: the same HTTP server runs
+// in the main process and a BrowserWindow simply loads it. Ships its own
+// Chromium, so it needs nothing installed on the player's machine.
+function openElectronWindow(url) {
+  const { app, BrowserWindow, Menu } = require('electron');
+  function create() {
+    const win = new BrowserWindow({
+      width: 1024, height: 700, minWidth: 640, minHeight: 480,
+      backgroundColor: '#020208',
+      title: 'JOUST — Neon Edition',
+      autoHideMenuBar: true,
+      webPreferences: { contextIsolation: true, nodeIntegration: false }
+    });
+    Menu.setApplicationMenu(null);
+    if (WANT_FULLSCREEN) win.setFullScreen(true);
+    win.loadURL(url);
+  }
+  if (app.isReady()) create();
+  else app.whenReady().then(create);
+  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) create(); });
+  app.on('window-all-closed', () => app.quit()); // closing the window quits the app
+}
+
 let started = false;
 function onListening() {
   if (started) return; // guard against a retry leaving a stale 'listening' handler
   started = true;
-  const url = 'http://localhost:' + server.address().port;
+  const url = 'http://127.0.0.1:' + server.address().port;
   console.log('JOUST — Neon Edition');
   console.log('  play:   ' + url);
   console.log('  scores: ' + SCORES_FILE);
+  if (IN_ELECTRON) { openElectronWindow(url); return; }
   if (WANT_WINDOW) launchWindow(url);
   else console.log('  (open the URL above to play — run with --window for an app window)');
 }
 
 // Bind the port; if it's taken, fall back to any free port so the app still
-// launches instead of crashing on EADDRINUSE.
+// launches instead of crashing on EADDRINUSE. Desktop-app modes bind loopback
+// only; pure server mode keeps the default (all interfaces) for LAN play.
+const HOST = (IN_ELECTRON || WANT_WINDOW) ? '127.0.0.1' : (process.env.HOST || undefined);
 let triedFallback = false;
 function bind(port) {
   server.once('error', (e) => {
@@ -1676,6 +1710,7 @@ function bind(port) {
       process.exit(1);
     }
   });
-  server.listen(port, onListening);
+  if (HOST) server.listen(port, HOST, onListening);
+  else server.listen(port, onListening);
 }
 bind(PORT);

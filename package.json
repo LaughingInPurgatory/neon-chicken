@@ -2,23 +2,48 @@
   "name": "joust-neon-edition",
   "version": "1.1.0",
   "description": "Single-file web Joust with neon effects, power-ups, and a flat-file high score table",
+  "author": "schtufbox",
+  "license": "MIT",
   "main": "joust.js",
-  "bin": "joust.js",
   "scripts": {
     "start": "node joust.js",
-    "build": "pkg . --no-bytecode --public --compress GZip --out-path dist"
+    "app": "electron .",
+    "dist": "electron-builder"
   },
-  "pkg": {
-    "targets": [
-      "node22-macos-arm64",
-      "node22-macos-x64",
-      "node22-win-x64",
-      "node22-win-arm64",
-      "node22-linux-x64"
+  "build": {
+    "appId": "com.schtufbox.joust",
+    "productName": "JOUST Neon Edition",
+    "artifactName": "joust-neon-edition-${os}-${arch}.${ext}",
+    "files": [
+      "joust.js",
+      "package.json"
     ],
-    "outputPath": "dist"
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "category": "public.app-category.games",
+      "target": [
+        { "target": "dmg", "arch": ["arm64", "x64"] },
+        { "target": "zip", "arch": ["arm64", "x64"] }
+      ]
+    },
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64", "arm64"] },
+        { "target": "zip", "arch": ["x64", "arm64"] }
+      ]
+    },
+    "linux": {
+      "category": "Game",
+      "target": [
+        { "target": "AppImage", "arch": ["x64"] },
+        { "target": "tar.gz", "arch": ["x64"] }
+      ]
+    }
   },
   "devDependencies": {
-    "@yao-pkg/pkg": "^6.3.0"
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
   }
 }

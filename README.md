@@ -6,23 +6,15 @@ No build step, no dependencies, no frameworks — just Node and a browser.
 
 ## Play
 
-The easiest way is a [standalone executable](#standalone-executables) — double-click it and the game opens in its own window, no browser or URL needed.
+The easiest way is the [desktop app](#desktop-app) — download it, double-click, and the game opens in its own window. No browser, no install, nothing else needed.
 
-From source, run the server and open it in a browser:
+You can also run it [as a plain web server](#also-runs-as-a-plain-web-server) from source:
 
 ```
 node joust.js
 ```
 
-Then open **http://localhost:8022**.
-
-Override the port with an environment variable:
-
-```
-PORT=9000 node joust.js
-```
-
-(`npm start` runs the same thing.) To get the self-contained app window from source too, add `--window` (`node joust.js --window`).
+Then open **http://localhost:8022** (override with `PORT=9000 node joust.js`; `npm start` is the same).
 
 ## Controls
 
@@ -69,63 +61,67 @@ Beat the tenth-place score and you'll enter your three initials on the game-over
 - Runtime-synthesized sound and music via the Web Audio API (no audio files)
 - Keyboard **and** gamepad support throughout
 
-## Standalone executables
+## Desktop app
 
-You can bundle the game into a self-contained native executable that needs no installed Node — just double-click (or run) it and the game **opens in its own window**. Closing the window quits the app.
+The game ships as a **self-contained Electron desktop app** that bundles its own browser engine — it needs nothing installed (no Node, no browser). Double-click it and the game opens in a native window; close the window and it quits.
 
-The window uses whatever Chromium-based browser you already have (Microsoft Edge, Chrome, Brave, or Chromium) in a chromeless "app" mode. Windows always has Edge, so it works out of the box; on a machine with no Chromium browser it falls back to opening your default browser and prints the URL.
+Build the app for your current platform:
 
 ```
-npm install      # one-time: fetches the bundler (@yao-pkg/pkg)
-npm run build    # writes binaries to dist/
+npm install     # one-time: fetches Electron + electron-builder (a large download)
+npm run app     # run the app locally without packaging
+npm run dist    # package installers/archives into dist/
 ```
 
-This produces, in `dist/`:
+`npm run dist` produces, in `dist/`:
 
-| File | Platform |
+| Platform | Artifacts |
 | --- | --- |
-| `joust-neon-edition-macos-arm64` | macOS (Apple Silicon) |
-| `joust-neon-edition-macos-x64` | macOS (Intel) |
-| `joust-neon-edition-win-x64.exe` | Windows (x64) |
-| `joust-neon-edition-win-arm64.exe` | Windows (ARM) |
-| `joust-neon-edition-linux-x64` | Linux (x64) |
+| macOS (Apple Silicon + Intel) | `.dmg` installer and `.zip` |
+| Windows (x64 + ARM) | `.exe` (NSIS installer) and `.zip` |
+| Linux (x64) | `.AppImage` and `.tar.gz` |
 
-Each executable writes its `scores.txt` **next to the binary**, so keep it in a writable folder. First run of `npm run build` downloads the base Node runtimes it embeds, so it needs network access and takes a minute; later builds are cached.
+Each machine builds its own platform's artifacts (Electron apps can't fully cross-compile), so the full set is produced by CI — see [Automated releases](#automated-releases). High scores are saved to `scores.txt` in the OS's per-user app-data folder (e.g. `~/Library/Application Support/joust-neon-edition/` on macOS, `%APPDATA%` on Windows).
 
-#### Runtime options
+**Runtime options** (env vars, for the app or `node joust.js`):
 
-Flags (or environment variables) control the window behavior of any build or `node joust.js`:
-
-| Flag | Env | Effect |
-| --- | --- | --- |
-| `--window` | `JOUST_WINDOW=1` | Open the app window (default for a packaged binary; off for `node joust.js`) |
-| `--server` | `JOUST_NO_WINDOW=1` | Server only — don't open a window (useful for remote/headless play) |
-| `--fullscreen` | `JOUST_FULLSCREEN=1` | Launch the window fullscreen |
-| — | `PORT=9000` | Serve on a specific port (auto-falls back to a free port if it's busy) |
-| — | `JOUST_BROWSER=/path/to/browser` | Use a specific Chromium browser instead of auto-detecting |
+| Env | Effect |
+| --- | --- |
+| `JOUST_FULLSCREEN=1` | Launch the window fullscreen |
+| `PORT=9000` | Serve on a specific port (auto-falls back to a free port if it's busy) |
 
 ### Automated releases
 
-Pushing a version tag builds all five binaries in CI and publishes them (zipped, with `SHA256SUMS.txt`) to a GitHub Release:
+Pushing a version tag builds the apps for all three platforms in CI (a macOS / Windows / Linux matrix) and publishes them, with `SHA256SUMS.txt`, to a GitHub Release:
 
 ```
-git tag v1.0.0
-git push origin v1.0.0
+git tag v1.2.0
+git push origin v1.2.0
 ```
 
 The workflow ([.github/workflows/release.yml](.github/workflows/release.yml)) also runs from the Actions tab on demand (building artifacts without publishing).
 
-**Code signing is optional.** With no secrets configured, the binaries are unsigned/ad-hoc — they run locally but trip Gatekeeper (macOS) and SmartScreen (Windows) on *other* machines. To ship signed, notarized binaries, add these repository secrets and the workflow signs automatically:
+**Code signing is optional.** With no secrets configured the apps are unsigned — they run locally but trip Gatekeeper (macOS) and SmartScreen (Windows) on *other* machines. electron-builder signs automatically when these repository secrets are present:
 
 | Secret | Purpose |
 | --- | --- |
-| `MACOS_CERTIFICATE`, `MACOS_CERTIFICATE_PWD`, `MACOS_SIGN_IDENTITY` | base64 Developer ID `.p12`, its password, and the identity name — signs the macOS binaries |
-| `APPLE_ID`, `APPLE_APP_PASSWORD`, `APPLE_TEAM_ID` | Apple ID, app-specific password, Team ID — notarizes the macOS archives |
-| `WINDOWS_CERTIFICATE`, `WINDOWS_CERTIFICATE_PWD` | base64 code-signing `.pfx` and its password — Authenticode-signs the `.exe` files |
+| `CSC_LINK`, `CSC_KEY_PASSWORD` | base64 code-signing certificate (`.p12`/`.pfx`) and its password — signs macOS and/or Windows builds |
+| `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | notarizes the macOS build |
+
+## Also runs as a plain web server
+
+`joust.js` is still a zero-dependency Node HTTP server, so you can run it headless and connect a browser (handy for remote play):
+
+```
+node joust.js          # then open http://localhost:8022
+node joust.js --window  # or auto-open it in a local Chromium browser (app mode)
+```
 
 ## Requirements
 
-To run from source: Node.js (any modern version) and a browser with Canvas, Web Audio, and — optionally — Gamepad API support. No `npm install` needed to *play* from source; the dependency above is only for building the standalone executables.
+- **To play the desktop app:** nothing — it's self-contained.
+- **To build it:** Node.js and `npm install` (pulls Electron).
+- **To run from source as a web server:** just Node.js and a browser with Canvas, Web Audio, and (optionally) Gamepad API support.
 
 ## Project layout
 
