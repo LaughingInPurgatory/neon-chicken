@@ -1663,22 +1663,38 @@ function launchWindow(url) {
 // Chromium, so it needs nothing installed on the player's machine.
 function openElectronWindow(url) {
   const { app, BrowserWindow, Menu } = require('electron');
+  let win = null;
   function create() {
-    const win = new BrowserWindow({
+    win = new BrowserWindow({
       width: 1024, height: 700, minWidth: 640, minHeight: 480,
       backgroundColor: '#020208',
       title: 'JOUST — Neon Edition',
+      show: false, // wait for content so we never flash an empty frame
       autoHideMenuBar: true,
       webPreferences: { contextIsolation: true, nodeIntegration: false }
     });
     Menu.setApplicationMenu(null);
     if (WANT_FULLSCREEN) win.setFullScreen(true);
+    win.once('ready-to-show', function () { win.show(); win.focus(); console.log('  window: shown'); });
+    win.webContents.on('did-finish-load', function () { console.log('  window: game loaded'); });
+    win.webContents.on('did-fail-load', function (ev, code, desc) {
+      console.log('  window: load failed (' + code + ' ' + desc + ') — retrying');
+      setTimeout(function () { if (win && !win.isDestroyed()) win.loadURL(url); }, 300);
+    });
+    win.webContents.on('render-process-gone', function (ev, d) { console.log('  window: renderer gone — ' + d.reason); });
     win.loadURL(url);
   }
-  if (app.isReady()) create();
-  else app.whenReady().then(create);
-  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) create(); });
-  app.on('window-all-closed', () => app.quit()); // closing the window quits the app
+  function boot() {
+    console.log('  window: opening');
+    if (process.platform === 'darwin' && app.dock) app.dock.show();
+    create();
+    try { app.focus({ steal: true }); } catch (e) {}
+  }
+  if (app.isReady()) boot();
+  else app.whenReady().then(boot);
+  app.on('child-process-gone', function (ev, d) { console.log('  child gone: ' + d.type + ' — ' + d.reason); });
+  app.on('activate', function () { if (BrowserWindow.getAllWindows().length === 0) create(); });
+  app.on('window-all-closed', function () { app.quit(); }); // closing the window quits the app
 }
 
 let started = false;
