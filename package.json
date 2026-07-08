@@ -1,6 +1,6 @@
 {
   "name": "joust-neon-edition",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Single-file web Joust with neon effects, power-ups, and a flat-file high score table",
   "author": "schtufbox",
   "license": "MIT",
