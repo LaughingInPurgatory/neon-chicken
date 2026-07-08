@@ -83,6 +83,17 @@ npm run dist    # package installers/archives into dist/
 
 Each machine builds its own platform's artifacts (Electron apps can't fully cross-compile), so the full set is produced by CI — see [Automated releases](#automated-releases). High scores are saved to `scores.txt` in the OS's per-user app-data folder (e.g. `~/Library/Application Support/joust-neon-edition/` on macOS, `%APPDATA%` on Windows).
 
+### First launch (unsigned builds)
+
+The released apps are **not** signed with a paid developer certificate (the macOS build is only ad-hoc signed), so the OS will warn the first time you open a downloaded copy:
+
+- **macOS** — double-clicking shows "cannot be opened because the developer cannot be verified," and the window may not appear. Clear it once, either way:
+  - **Right-click the app → Open → Open**, or
+  - in Terminal: `xattr -cr "/path/to/JOUST Neon Edition.app"` then open it normally.
+- **Windows** — SmartScreen shows "Windows protected your PC." Click **More info → Run anyway**.
+
+After that first allow, it launches normally. To remove the warning entirely, the app needs code signing + notarization (see [Automated releases](#automated-releases)).
+
 **Runtime options** (env vars, for the app or `node joust.js`):
 
 | Env | Effect |

@@ -14,6 +14,7 @@
     "appId": "com.schtufbox.joust",
     "productName": "JOUST Neon Edition",
     "artifactName": "joust-neon-edition-${os}-${arch}.${ext}",
+    "afterPack": "./build/afterPack.js",
     "files": [
       "joust.js",
       "package.json"
