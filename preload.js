@@ -9,5 +9,6 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('joustAPI', {
   getScores: () => ipcRenderer.invoke('scores:get'),
-  addScore: (name, score) => ipcRenderer.invoke('scores:add', { name, score })
+  addScore: (name, score) => ipcRenderer.invoke('scores:add', { name, score }),
+  quit: () => ipcRenderer.send('app:quit') // Quit button -> exit the app
 });

@@ -17,6 +17,7 @@ const db = createScoreDB(path.join(app.getPath('userData'), 'scores.txt'));
 
 ipcMain.handle('scores:get', () => db.loadScores());
 ipcMain.handle('scores:add', (_e, arg) => db.addScore(arg && arg.name, arg && arg.score));
+ipcMain.on('app:quit', () => app.quit()); // pause-menu Quit button
 
 const FULLSCREEN = process.env.JOUST_FULLSCREEN === '1' || process.env.JOUST_FULLSCREEN === 'true';
 

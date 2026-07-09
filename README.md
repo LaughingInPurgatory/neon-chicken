@@ -15,10 +15,12 @@ Grab the [desktop app](#desktop-app) for your platform, double-click, and the ga
 | Move | Arrow keys or `A` / `D` | Left stick / D-pad |
 | Flap | `Space`, `↑`, or `W` | `A` (button 0) |
 | Start / Confirm | `Enter` | `Start` |
-| Pause | `P` | `Start` |
+| Pause menu | `Esc` (or `P`) | `Start` |
 | Mute | `M` | — |
 
 Flapping is a tap, not a hold — each press gives one upward beat, and gravity is always pulling you down. Gamepads are hot-pluggable.
+
+Pressing `Esc` during play opens a **pause menu** showing the high scores with **Continue**, **Restart Game**, and **Quit Game** — navigate with the arrows, mouse, or gamepad.
 
 ## How to play
 

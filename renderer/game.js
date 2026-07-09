@@ -18,6 +18,14 @@ var ctx = cv.getContext('2d');
 var ST = { INTRO: 1, PLAY: 2, DYING: 3, WAVECLEAR: 4, OVER: 5, NAME: 6 };
 var state = ST.INTRO, stateT = 0, paused = false, time = 0;
 
+// Escape pause menu (high scores + Continue / Restart / Quit).
+var pauseMenu = false, pauseSel = 0;
+var pauseBtns = [
+  { label: 'CONTINUE',     x: 480 - 150, y: 396, w: 300, h: 46, col: '#00e5ff' },
+  { label: 'RESTART GAME', x: 480 - 150, y: 450, w: 300, h: 46, col: '#ffe600' },
+  { label: 'QUIT GAME',    x: 480 - 150, y: 504, w: 300, h: 46, col: '#ff3860' }
+];
+
 var player = null, enemies = [], eggs = [], powerups = [], parts = [], texts = [], toasts = [];
 var plats = [], enemyPads = [], playerPad = null, pending = [], demo = [];
 var wave = 1, score = 0, lives = 5, nextLife = 20000;
@@ -55,8 +63,8 @@ for (var si = 0; si < 90; si++) {
 /* -------------------- input (keyboard + gamepad) -------------------- */
 var keys = {};
 var input = { left: false, right: false, flap: false, start: false };
-var edge = { flap: false, start: false, up: false, down: false, left: false, right: false, back: false };
-var prevIn = { flap: false, start: false, up: false, down: false, left: false, right: false, back: false };
+var edge = { flap: false, start: false, up: false, down: false, left: false, right: false, back: false, padA: false };
+var prevIn = { flap: false, start: false, up: false, down: false, left: false, right: false, back: false, padA: false };
 var padIndex = null, padWasConnected = false;
 
 window.addEventListener('gamepadconnected', function (e) {
@@ -69,14 +77,57 @@ window.addEventListener('gamepaddisconnected', function (e) {
 
 window.addEventListener('keydown', function (e) {
   initAudio();
-  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].indexOf(e.code) >= 0) e.preventDefault();
+  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Escape'].indexOf(e.code) >= 0) e.preventDefault();
   keys[e.code] = true;
   if (e.code === 'KeyM') toggleMute();
-  if (e.code === 'KeyP' && state === ST.PLAY) { paused = !paused; toast(paused ? 'PAUSED' : 'RESUMED'); }
+  // Escape (or P) toggles the pause menu during play.
+  if ((e.code === 'Escape' || e.code === 'KeyP') && (state === ST.PLAY || pauseMenu)) {
+    if (pauseMenu) closePause(); else openPause();
+  }
   if (state === ST.NAME) nameKeyboard(e);
 });
 window.addEventListener('keyup', function (e) { keys[e.code] = false; });
 window.addEventListener('mousedown', initAudio);
+
+// Pause-menu pointer support: hover to highlight, click to choose.
+function pauseCoords(e) {
+  var r = cv.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * (W / r.width), y: (e.clientY - r.top) * (H / r.height) };
+}
+function pauseHit(p) {
+  for (var i = 0; i < pauseBtns.length; i++) {
+    var b = pauseBtns[i];
+    if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) return i;
+  }
+  return -1;
+}
+cv.addEventListener('mousemove', function (e) {
+  if (!pauseMenu) return;
+  var i = pauseHit(pauseCoords(e));
+  if (i >= 0) pauseSel = i;
+});
+cv.addEventListener('mousedown', function (e) {
+  if (!pauseMenu) return;
+  var i = pauseHit(pauseCoords(e));
+  if (i >= 0) { pauseSel = i; pauseActivate(); }
+});
+
+function openPause() {
+  if (state !== ST.PLAY || pauseMenu) return;
+  paused = true; pauseMenu = true; pauseSel = 0;
+  cv.style.cursor = 'default'; // canvas normally hides the cursor
+  fetchScores();               // refresh the table for display
+  sfx.hatch();
+}
+function closePause() {
+  paused = false; pauseMenu = false;
+  cv.style.cursor = 'none';
+}
+function pauseActivate() {
+  if (pauseSel === 0) { closePause(); sfx.egg(); }
+  else if (pauseSel === 1) { closePause(); startGame(); sfx.wave(); }
+  else if (pauseSel === 2) { if (window.joustAPI && window.joustAPI.quit) window.joustAPI.quit(); }
+}
 
 function getPad() {
   if (padIndex === null || !navigator.getGamepads) return null;
@@ -110,9 +161,10 @@ function pollInput() {
   edge.left = input.left && !prevIn.left;
   edge.right = input.right && !prevIn.right;
   edge.back = pBack && !prevIn.back;
+  edge.padA = pFlap && !prevIn.padA; // gamepad A rising edge (menu confirm; distinct from keyboard flap)
   prevIn.flap = input.flap; prevIn.start = input.start;
   prevIn.up = up; prevIn.down = down;
-  prevIn.left = input.left; prevIn.right = input.right; prevIn.back = pBack;
+  prevIn.left = input.left; prevIn.right = input.right; prevIn.back = pBack; prevIn.padA = pFlap;
   if (edge.flap || edge.start) initAudio();
 }
 
@@ -741,8 +793,17 @@ function tick(dt) {
       break;
 
     case ST.PLAY:
-      if (paused) { if (edge.start) paused = false; return; }
-      if (edge.start) { paused = true; toast('PAUSED'); return; }
+      if (paused) {
+        if (pauseMenu) {
+          if (edge.up) { pauseSel = (pauseSel + pauseBtns.length - 1) % pauseBtns.length; sfx.hatch(); }
+          if (edge.down) { pauseSel = (pauseSel + 1) % pauseBtns.length; sfx.hatch(); }
+          if (edge.start || edge.padA) pauseActivate();
+          else if (edge.back) closePause(); // gamepad B = resume
+        } else if (edge.start) { paused = false; }
+        updateFx(dt); // keep starfield/lava/particles gently alive under the overlay
+        return;
+      }
+      if (edge.start) { openPause(); return; } // Enter / gamepad Start opens the menu
       for (var s = pending.length - 1; s >= 0; s--) {
         pending[s].t -= dt;
         if (pending[s].t <= 0) { enemies.push(newEnemy(pending[s].pad, pending[s].tier)); pending.splice(s, 1); }
@@ -1188,6 +1249,31 @@ function drawScoreTable(y0) {
   ctx.shadowBlur = 0;
 }
 
+function drawPauseMenu() {
+  ctx.fillStyle = 'rgba(4,1,14,0.84)';
+  ctx.fillRect(0, 0, W, H);
+  neonText('PAUSED', W / 2, 78, 46, '#00e5ff');
+  drawScoreTable(116);
+  for (var i = 0; i < pauseBtns.length; i++) {
+    var b = pauseBtns[i], sel = i === pauseSel;
+    ctx.save();
+    ctx.strokeStyle = b.col;
+    ctx.lineWidth = sel ? 3 : 1.5;
+    ctx.shadowColor = b.col;
+    ctx.shadowBlur = sel ? 18 : 6;
+    ctx.fillStyle = sel ? 'rgba(255,255,255,0.10)' : 'rgba(10,5,25,0.55)';
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.strokeRect(b.x, b.y, b.w, b.h);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = sel ? '#ffffff' : b.col;
+    ctx.font = 'bold 20px "Courier New", monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText((sel ? '▸ ' : '') + b.label, b.x + b.w / 2, b.y + b.h / 2 + 1);
+    ctx.restore();
+  }
+  neonText('↑ ↓ / MOUSE  SELECT      ENTER / CLICK  CHOOSE      ESC  RESUME', W / 2, 580, 11, '#8ea6ff');
+}
+
 function drawTitle() {
   var pulse = 0.75 + 0.25 * Math.sin(time * 2.4);
   ctx.save();
@@ -1333,11 +1419,12 @@ function render() {
       neonText('GAME OVER', W / 2, 280, 68, '#ff3860');
       neonText('FINAL SCORE: ' + score, W / 2, 330, 24, '#ffe600');
     }
-    if (paused) {
+    if (pauseMenu) drawPauseMenu();
+    else if (paused) {
       ctx.fillStyle = 'rgba(4,1,14,0.6)';
       ctx.fillRect(0, 0, W, H);
       neonText('PAUSED', W / 2, 290, 52, '#00e5ff');
-      neonText('P / START TO RESUME', W / 2, 330, 16, '#8ea6ff');
+      neonText('ESC / START TO RESUME', W / 2, 330, 16, '#8ea6ff');
     }
     if (troll.grab) {
       neonText('FLAP! FLAP! FLAP!', W / 2, 220, 30, '#ff7b00');
@@ -1386,9 +1473,15 @@ window.__joust = {
   set score(v) { score = v; },
   set lives(v) { lives = v; },
   get hiscores() { return hiscores; },
+  get pauseMenu() { return pauseMenu; },
+  get pauseSel() { return pauseSel; },
+  set pauseSel(v) { pauseSel = v; },
   startGame: startGame,
   startWave: startWave,
   defeatEnemy: defeatEnemy,
-  killPlayer: killPlayer
+  killPlayer: killPlayer,
+  openPause: openPause,
+  closePause: closePause,
+  pauseActivate: pauseActivate
 };
 })();
