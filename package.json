@@ -1,6 +1,6 @@
 {
   "name": "joust-neon-edition",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Single-file web Joust with neon effects, power-ups, and a flat-file high score table",
   "author": "schtufbox",
   "license": "MIT",
@@ -35,13 +35,6 @@
             "arm64",
             "x64"
           ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "arm64",
-            "x64"
-          ]
         }
       ]
     },
@@ -49,13 +42,6 @@
       "target": [
         {
           "target": "nsis",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        },
-        {
-          "target": "zip",
           "arch": [
             "x64",
             "arm64"
@@ -68,12 +54,6 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "tar.gz",
           "arch": [
             "x64"
           ]

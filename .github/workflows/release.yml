@@ -57,11 +57,11 @@ jobs:
         shell: bash
         run: |
           mkdir -p out
-          # Skip electron-builder's combined multi-arch NSIS installer
+          # Ship only the installers (.dmg / .exe / .AppImage). Skip
+          # electron-builder's combined multi-arch NSIS installer
           # (joust-neon-edition-win.exe); we ship the per-arch installers instead.
           find dist -maxdepth 1 -type f \
-            \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' \
-               -o -name '*.AppImage' -o -name '*.tar.gz' \) \
+            \( -name '*.dmg' -o -name '*.exe' -o -name '*.AppImage' \) \
             ! -name 'joust-neon-edition-win.exe' \
             -exec cp {} out/ \;
           ls -la out

@@ -75,11 +75,11 @@ npm run dist    # package installers/archives into dist/
 
 `npm run dist` produces, in `dist/`:
 
-| Platform | Artifacts |
+| Platform | Installer |
 | --- | --- |
-| macOS (Apple Silicon + Intel) | `.dmg` installer and `.zip` |
-| Windows (x64 + ARM) | `.exe` (NSIS installer) and `.zip` |
-| Linux (x64) | `.AppImage` and `.tar.gz` |
+| macOS (Apple Silicon + Intel) | `.dmg` |
+| Windows (x64 + ARM) | `.exe` (NSIS) |
+| Linux (x64) | `.AppImage` |
 
 Each machine builds its own platform's artifacts (Electron apps can't fully cross-compile), so the full set is produced by CI — see [Automated releases](#automated-releases). High scores are saved to `scores.txt` in the OS's per-user app-data folder (e.g. `~/Library/Application Support/joust-neon-edition/` on macOS, `%APPDATA%` on Windows).
 
