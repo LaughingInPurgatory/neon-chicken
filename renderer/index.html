@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data:;">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JOUST — Neon Edition</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #020208;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  canvas {
+    width: min(100vw, 160vh);
+    height: auto;
+    aspect-ratio: 8 / 5;
+    box-shadow: 0 0 90px rgba(0, 229, 255, 0.12), 0 0 30px rgba(255, 45, 149, 0.10);
+    border-radius: 4px;
+    cursor: none;
+  }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<script src="game.js"></script>
+</body>
+</html>

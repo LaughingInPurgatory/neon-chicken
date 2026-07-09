@@ -1,20 +1,12 @@
 # JOUST — Neon Edition
 
-A modern, single-file web remake of the 1982 Atari arcade classic **Joust**. Flap your neon mount to gain height, ram enemy riders from above to unhorse them, collect the eggs they drop before they hatch, and survive wave after wave over a sea of lava.
+A modern remake of the 1982 Atari arcade classic **Joust**, as a self-contained neon desktop app. Flap your neon mount to gain height, ram enemy riders from above to unhorse them, collect the eggs they drop before they hatch, and survive wave after wave over a sea of lava.
 
-No build step, no dependencies, no frameworks — just Node and a browser.
+Built with Electron: the game (HTML5 Canvas + Web Audio, all procedural) runs in the app window, and a tiny main process persists high scores to a plain-text file. No server, no browser to open — just run it.
 
 ## Play
 
-The easiest way is the [desktop app](#desktop-app) — download it, double-click, and the game opens in its own window. No browser, no install, nothing else needed.
-
-You can also run it [as a plain web server](#also-runs-as-a-plain-web-server) from source:
-
-```
-node joust.js
-```
-
-Then open **http://localhost:8022** (override with `PORT=9000 node joust.js`; `npm start` is the same).
+Grab the [desktop app](#desktop-app) for your platform, double-click, and the game opens in its own window. Nothing else to install.
 
 ## Controls
 
@@ -50,7 +42,7 @@ Dropped by defeated enemies or floating in ambiently. Active effects show as rin
 
 ## High scores
 
-Beat the tenth-place score and you'll enter your three initials on the game-over screen (type them, or cycle letters with the D-pad). The top 10 are saved to a plain-text file, `scores.txt`, next to `joust.js` — one `NAME SCORE DATE` entry per line. Delete that file to reset the leaderboard.
+Beat the tenth-place score and you'll enter your three initials on the game-over screen (type them, or cycle letters with the D-pad). The top 10 are saved to a plain-text `scores.txt` in the app's per-user data folder — one `NAME SCORE DATE` entry per line. This is the **only** file the app ever writes outside its own bundle. Delete it to reset the leaderboard.
 
 ## Features
 
@@ -65,12 +57,13 @@ Beat the tenth-place score and you'll enter your three initials on the game-over
 
 The game ships as a **self-contained Electron desktop app** that bundles its own browser engine — it needs nothing installed (no Node, no browser). Double-click it and the game opens in a native window; close the window and it quits.
 
-Build the app for your current platform:
+To run or build from source:
 
 ```
 npm install     # one-time: fetches Electron + electron-builder (a large download)
-npm run app     # run the app locally without packaging
-npm run dist    # package installers/archives into dist/
+npm start       # run the app locally
+npm test        # run the score-database tests
+npm run dist    # package installers into dist/
 ```
 
 `npm run dist` produces, in `dist/`:
@@ -94,20 +87,15 @@ The released apps are **not** signed with a paid developer certificate (the macO
 
 After that first allow, it launches normally. To remove the warning entirely, the app needs code signing + notarization (see [Automated releases](#automated-releases)).
 
-**Runtime options** (env vars, for the app or `node joust.js`):
-
-| Env | Effect |
-| --- | --- |
-| `JOUST_FULLSCREEN=1` | Launch the window fullscreen |
-| `PORT=9000` | Serve on a specific port (auto-falls back to a free port if it's busy) |
+**Runtime options:** set `JOUST_FULLSCREEN=1` to launch the window fullscreen.
 
 ### Automated releases
 
 Pushing a version tag builds the apps for all three platforms in CI (a macOS / Windows / Linux matrix) and publishes them, with `SHA256SUMS.txt`, to a GitHub Release:
 
 ```
-git tag v1.2.0
-git push origin v1.2.0
+git tag v1.3.0
+git push origin v1.3.0
 ```
 
 The workflow ([.github/workflows/release.yml](.github/workflows/release.yml)) also runs from the Actions tab on demand (building artifacts without publishing).
@@ -119,21 +107,22 @@ The workflow ([.github/workflows/release.yml](.github/workflows/release.yml)) al
 | `CSC_LINK`, `CSC_KEY_PASSWORD` | base64 code-signing certificate (`.p12`/`.pfx`) and its password — signs macOS and/or Windows builds |
 | `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | notarizes the macOS build |
 
-## Also runs as a plain web server
-
-`joust.js` is still a zero-dependency Node HTTP server, so you can run it headless and connect a browser (handy for remote play):
-
-```
-node joust.js          # then open http://localhost:8022
-node joust.js --window  # or auto-open it in a local Chromium browser (app mode)
-```
-
 ## Requirements
 
 - **To play the desktop app:** nothing — it's self-contained.
-- **To build it:** Node.js and `npm install` (pulls Electron).
-- **To run from source as a web server:** just Node.js and a browser with Canvas, Web Audio, and (optionally) Gamepad API support.
+- **To run or build from source:** Node.js and `npm install` (pulls Electron).
 
 ## Project layout
 
-The whole game — HTTP server, HTML, CSS, and gameplay — lives in the single file **`joust.js`** by design. The only other file created at runtime is `scores.txt`. See [CLAUDE.md](CLAUDE.md) for architecture notes.
+```
+main.js              Electron main process — window + high-score IPC + file I/O
+preload.js           contextBridge: exposes window.joustAPI to the game
+scores.js            flat-file high-score database (plain node, unit-tested)
+renderer/
+  index.html         the app window shell (canvas + CSP)
+  game.js            the entire game (Canvas + Web Audio + Gamepad), procedural
+build/               electron-builder resources (entitlements, afterPack signing)
+test/scores.test.js  score-database tests (npm test)
+```
+
+The renderer is sandboxed (context isolation on, no Node access); its only bridge to the system is `window.joustAPI` for reading/saving scores. See [CLAUDE.md](CLAUDE.md) for architecture notes.
