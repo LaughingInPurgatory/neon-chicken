@@ -18,13 +18,23 @@ var ctx = cv.getContext('2d');
 var ST = { INTRO: 1, PLAY: 2, DYING: 3, WAVECLEAR: 4, OVER: 5, NAME: 6 };
 var state = ST.INTRO, stateT = 0, paused = false, time = 0;
 
-// Escape pause menu (high scores + Continue / Restart / Quit).
+// Escape pause menu (high scores + Continue / Restart / Music / Quit).
 var pauseMenu = false, pauseSel = 0;
 var pauseBtns = [
-  { label: 'CONTINUE',     x: 480 - 150, y: 396, w: 300, h: 46, col: '#00e5ff' },
-  { label: 'RESTART GAME', x: 480 - 150, y: 450, w: 300, h: 46, col: '#ffe600' },
-  { label: 'QUIT GAME',    x: 480 - 150, y: 504, w: 300, h: 46, col: '#ff3860' }
+  { id: 'continue', label: 'CONTINUE',     x: 480 - 150, y: 376, w: 300, h: 42, col: '#00e5ff' },
+  { id: 'restart',  label: 'RESTART GAME', x: 480 - 150, y: 424, w: 300, h: 42, col: '#ffe600' },
+  { id: 'music',    label: '',             x: 480 - 150, y: 472, w: 300, h: 42, col: '#00ff88' },
+  { id: 'quit',     label: 'QUIT GAME',    x: 480 - 150, y: 520, w: 300, h: 42, col: '#ff3860' }
 ];
+// Music item's label and colour track the current setting.
+function pauseLabel(b) { return b.id === 'music' ? ('MUSIC: ' + (musicOn ? 'ON' : 'OFF')) : b.label; }
+function pauseColor(b) { return (b.id === 'music' && !musicOn) ? '#8ea6ff' : b.col; }
+
+// Title-screen music toggle (top-right).
+var musicBtn = { x: 960 - 148, y: 18, w: 130, h: 34 };
+var musicHover = false, curCursor = '';
+function setCursor(v) { if (curCursor !== v) { curCursor = v; cv.style.cursor = v; } }
+function hitRect(p, b) { return p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h; }
 
 var player = null, enemies = [], eggs = [], powerups = [], parts = [], texts = [], toasts = [];
 var plats = [], enemyPads = [], playerPad = null, pending = [], demo = [];
@@ -96,37 +106,44 @@ function pauseCoords(e) {
 }
 function pauseHit(p) {
   for (var i = 0; i < pauseBtns.length; i++) {
-    var b = pauseBtns[i];
-    if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) return i;
+    if (hitRect(p, pauseBtns[i])) return i;
   }
   return -1;
 }
 cv.addEventListener('mousemove', function (e) {
-  if (!pauseMenu) return;
-  var i = pauseHit(pauseCoords(e));
-  if (i >= 0) pauseSel = i;
+  var p = pauseCoords(e);
+  if (pauseMenu) {
+    var i = pauseHit(p);
+    if (i >= 0) pauseSel = i;
+    return;
+  }
+  musicHover = state === ST.INTRO && hitRect(p, musicBtn);
 });
 cv.addEventListener('mousedown', function (e) {
-  if (!pauseMenu) return;
-  var i = pauseHit(pauseCoords(e));
-  if (i >= 0) { pauseSel = i; pauseActivate(); }
+  var p = pauseCoords(e);
+  if (pauseMenu) {
+    var i = pauseHit(p);
+    if (i >= 0) { pauseSel = i; pauseActivate(); }
+    return;
+  }
+  if (state === ST.INTRO && hitRect(p, musicBtn)) toggleMusic();
 });
 
 function openPause() {
   if (state !== ST.PLAY || pauseMenu) return;
   paused = true; pauseMenu = true; pauseSel = 0;
-  cv.style.cursor = 'default'; // canvas normally hides the cursor
-  fetchScores();               // refresh the table for display
+  fetchScores(); // refresh the table for display
   sfx.hatch();
 }
 function closePause() {
   paused = false; pauseMenu = false;
-  cv.style.cursor = 'none';
 }
 function pauseActivate() {
-  if (pauseSel === 0) { closePause(); sfx.egg(); }
-  else if (pauseSel === 1) { closePause(); startGame(); sfx.wave(); }
-  else if (pauseSel === 2) { if (window.joustAPI && window.joustAPI.quit) window.joustAPI.quit(); }
+  var id = pauseBtns[pauseSel].id;
+  if (id === 'continue') { closePause(); sfx.egg(); }
+  else if (id === 'restart') { closePause(); startGame(); sfx.wave(); }
+  else if (id === 'music') { toggleMusic(); }        // stays in the menu
+  else if (id === 'quit') { if (window.joustAPI && window.joustAPI.quit) window.joustAPI.quit(); }
 }
 
 function getPad() {
@@ -168,8 +185,8 @@ function pollInput() {
   if (edge.flap || edge.start) initAudio();
 }
 
-/* -------------------- audio (all synthesized) -------------------- */
-var AC = null, master = null, muted = false, musicNext = 0, musicBeat = 0, noiseBuf = null;
+/* -------------------- audio (synthesized SFX; music from bundled mp3s) -------------------- */
+var AC = null, master = null, muted = false, noiseBuf = null;
 
 function initAudio() {
   if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
@@ -236,20 +253,51 @@ var sfx = {
   grab: function () { tone(90, 0.3, 'sawtooth', 0.15, 60); }
 };
 
-function updateMusic() {
-  if (!AC || muted || state !== ST.PLAY || paused) { musicNext = 0; return; }
-  var t = AC.currentTime;
-  if (!musicNext || musicNext < t) { musicNext = t + 0.05; musicBeat = 0; }
-  var bpm = Math.min(172, 102 + wave * 5), half = 30 / bpm;
-  var bass = [110, 110, 87.31, 98, 110, 110, 130.81, 98];
-  var arp = [220, 261.6, 329.6, 261.6];
-  while (musicNext < t + 0.12) {
-    var b = musicBeat;
-    if (b % 2 === 0) tone(bass[(b >> 1) % 8], half * 1.7, 'triangle', 0.075, 0, musicNext);
-    if (b % 4 === 2) noiseHit(0.03, 0.03, 6000, 1);
-    if (b % 8 === 7 && wave > 1) tone(arp[(b >> 3) % 4], half, 'square', 0.04, 0, musicNext);
-    musicNext += half; musicBeat++;
+/* -------------------- music (bundled mp3 tracks) -------------------- */
+/* Three tracks, picked by game state. The title and level tracks loop; the
+ * game-over track plays once. `musicOn` is the player's toggle; the global
+ * `muted` (M key) silences everything, music included. */
+var musicOn = true, curTrack = null, tracks = null;
+
+function initMusic() {
+  if (tracks) return;
+  function mk(src, loop) {
+    var a = new Audio(src);
+    a.loop = !!loop;
+    a.preload = 'auto';
+    a.volume = 0.55;
+    return a;
   }
+  tracks = {
+    intro: mk('audio/jst-intro.mp3', true),
+    bg: mk('audio/jst-bg.mp3', true),   // level music — repeats if it ends
+    dead: mk('audio/jst-ded.mp3', false)
+  };
+}
+
+function trackForState() {
+  if (state === ST.INTRO) return tracks.intro;
+  if (state === ST.OVER || state === ST.NAME) return tracks.dead;
+  return tracks.bg; // PLAY / DYING / WAVECLEAR
+}
+
+// Swaps tracks when the state changes and honours the music/mute toggles.
+function syncMusic() {
+  initMusic();
+  var want = (musicOn && !muted) ? trackForState() : null;
+  if (want === curTrack) return;
+  if (curTrack) { curTrack.pause(); curTrack.currentTime = 0; }
+  curTrack = want;
+  if (curTrack) {
+    var p = curTrack.play();
+    if (p && p.catch) p.catch(function () {}); // no audio device / autoplay blocked
+  }
+}
+
+function toggleMusic() {
+  musicOn = !musicOn;
+  toast(musicOn ? 'MUSIC ON' : 'MUSIC OFF');
+  syncMusic();
 }
 
 /* -------------------- high scores (client) -------------------- */
@@ -768,7 +816,8 @@ makeDemo();
 function tick(dt) {
   time += dt;
   pollInput();
-  updateMusic();
+  syncMusic();
+  setCursor((state === ST.INTRO || pauseMenu) ? 'default' : 'none');
   if (edge.back && state === ST.PLAY) {} // reserved
 
   switch (state) {
@@ -1249,29 +1298,33 @@ function drawScoreTable(y0) {
   ctx.shadowBlur = 0;
 }
 
+function drawButton(b, label, col, sel) {
+  ctx.save();
+  ctx.strokeStyle = col;
+  ctx.lineWidth = sel ? 3 : 1.5;
+  ctx.shadowColor = col;
+  ctx.shadowBlur = sel ? 18 : 6;
+  ctx.fillStyle = sel ? 'rgba(255,255,255,0.10)' : 'rgba(10,5,25,0.55)';
+  ctx.fillRect(b.x, b.y, b.w, b.h);
+  ctx.strokeRect(b.x, b.y, b.w, b.h);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = sel ? '#ffffff' : col;
+  ctx.font = 'bold ' + (b.h > 36 ? 20 : 13) + 'px "Courier New", monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(label, b.x + b.w / 2, b.y + b.h / 2 + 1);
+  ctx.restore();
+}
+
 function drawPauseMenu() {
   ctx.fillStyle = 'rgba(4,1,14,0.84)';
   ctx.fillRect(0, 0, W, H);
-  neonText('PAUSED', W / 2, 78, 46, '#00e5ff');
-  drawScoreTable(116);
+  neonText('PAUSED', W / 2, 72, 44, '#00e5ff');
+  drawScoreTable(104);
   for (var i = 0; i < pauseBtns.length; i++) {
     var b = pauseBtns[i], sel = i === pauseSel;
-    ctx.save();
-    ctx.strokeStyle = b.col;
-    ctx.lineWidth = sel ? 3 : 1.5;
-    ctx.shadowColor = b.col;
-    ctx.shadowBlur = sel ? 18 : 6;
-    ctx.fillStyle = sel ? 'rgba(255,255,255,0.10)' : 'rgba(10,5,25,0.55)';
-    ctx.fillRect(b.x, b.y, b.w, b.h);
-    ctx.strokeRect(b.x, b.y, b.w, b.h);
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = sel ? '#ffffff' : b.col;
-    ctx.font = 'bold 20px "Courier New", monospace';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText((sel ? '▸ ' : '') + b.label, b.x + b.w / 2, b.y + b.h / 2 + 1);
-    ctx.restore();
+    drawButton(b, (sel ? '▸ ' : '') + pauseLabel(b), pauseColor(b), sel);
   }
-  neonText('↑ ↓ / MOUSE  SELECT      ENTER / CLICK  CHOOSE      ESC  RESUME', W / 2, 580, 11, '#8ea6ff');
+  neonText('↑ ↓ / MOUSE  SELECT      ENTER / CLICK  CHOOSE      ESC  RESUME', W / 2, 582, 11, '#8ea6ff');
 }
 
 function drawTitle() {
@@ -1306,8 +1359,10 @@ function drawIntro() {
   if (Math.sin(time * 4) > -0.3) {
     neonText('PRESS FLAP TO START', W / 2, 505, 22, '#00e5ff');
   }
-  neonText('KEYS: ARROWS / A D MOVE · SPACE FLAP · P PAUSE · M MUTE', W / 2, 532, 12, '#8ea6ff');
+  neonText('KEYS: ARROWS / A D MOVE · SPACE FLAP · ESC PAUSE · M MUTE', W / 2, 532, 12, '#8ea6ff');
   neonText('GAMEPAD: STICK MOVE · A FLAP · START PAUSE', W / 2, 550, 12, '#8ea6ff');
+  drawButton(musicBtn, 'MUSIC: ' + (musicOn ? 'ON' : 'OFF'),
+             musicOn ? '#00ff88' : '#8ea6ff', musicHover);
 }
 
 function drawNameEntry() {
@@ -1476,6 +1531,10 @@ window.__joust = {
   get pauseMenu() { return pauseMenu; },
   get pauseSel() { return pauseSel; },
   set pauseSel(v) { pauseSel = v; },
+  get musicOn() { return musicOn; },
+  get curTrackSrc() { return curTrack ? curTrack.src.split('/').pop() : null; },
+  toggleMusic: toggleMusic,
+  syncMusic: syncMusic,
   startGame: startGame,
   startWave: startWave,
   defeatEnemy: defeatEnemy,

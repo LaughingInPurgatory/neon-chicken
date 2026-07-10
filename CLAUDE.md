@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A self-contained **Electron desktop app** remake of the arcade game Joust: an HTML5 Canvas game (all graphics and sound procedural — no image or audio assets) with a plain-text high-score database. The app loads the game directly from packaged files — **there is no server** — and the only thing it ever writes outside its own bundle is `scores.txt`.
+A self-contained **Electron desktop app** remake of the arcade game Joust: an HTML5 Canvas game (all graphics procedural, sound effects synthesized; music from three bundled mp3 tracks) with a plain-text high-score database. The app loads the game directly from packaged files — **there is no server** — and the only thing it ever writes outside its own bundle is `scores.txt`.
 
 ## Run / build / test
 
@@ -24,7 +24,8 @@ The app is split across two Electron processes. **Keep the split clean** — the
 - **`main.js` (main process).** Creates the `BrowserWindow`, `loadFile`s `renderer/index.html` (no server, no `loadURL`), and registers two IPC handlers (`scores:get`, `scores:add`) backed by the score DB. Closing the window quits (`window-all-closed`). `JOUST_FULLSCREEN=1` starts fullscreen.
 - **`preload.js`.** The *only* bridge into the renderer: `contextBridge.exposeInMainWorld('joustAPI', { getScores, addScore })`, each an `ipcRenderer.invoke`. Do not widen this surface without reason.
 - **`scores.js`.** The flat-file DB as a plain-node module (no Electron import, so it's unit-tested in `test/scores.test.js`). `createScoreDB(file, maxScores)` → `{ loadScores, addScore }`.
-- **`renderer/index.html`.** Window shell: the canvas, inline CSS, a strict CSP (`script-src 'self'`), and `<script src="game.js">`. Because CSP forbids inline scripts, all game code stays in `game.js`.
+- **`renderer/index.html`.** Window shell: the canvas, inline CSS, a strict CSP (`script-src 'self'; media-src 'self'`), and `<script src="game.js">`. Because CSP forbids inline scripts, all game code stays in `game.js`.
+- **`renderer/audio/`.** The three mp3 music tracks (packaged via the `renderer/**/*` entry in the electron-builder `files` list).
 - **`renderer/game.js`.** The entire game, an IIFE. Pure browser code; its only outside contact is `window.joustAPI` (see `fetchScores`/`postScore`). It exposes `window.__joust` for headless testing.
 
 Score persistence path: game → `window.joustAPI.addScore` (preload) → `ipcRenderer.invoke` → `ipcMain.handle` in `main.js` → `scores.js` → `<userData>/scores.txt`.
@@ -41,7 +42,8 @@ Organized as labelled comment sections: config → input → audio → high scor
 - **State machine.** `state` is one of `ST.INTRO / PLAY / DYING / WAVECLEAR / OVER / NAME`; both `tick` and `render` switch on it. Trace `startGame` → `startWave` → the `PLAY` case → `DYING`/`OVER`/`NAME`.
 - **Wave rule.** Wave N spawns N+1 enemies (wave 1 = 2). A wave is cleared only when `enemies`, `eggs`, and `pending` (queued spawns) are all empty. Enemy tiers are in `TIERS`; `tierFor` biases toward harder tiers on later waves.
 - **Unified input.** `pollInput()` merges keyboard state and the Gamepad API into one `input`/`edge` abstraction polled once per tick; game code reads those, never raw key events (except the name-entry text path).
-- **All assets are procedural.** Sprites are drawn with Canvas paths + `shadowBlur` (see `drawBird`); sound is synthesized with the Web Audio API (`sfx`, `updateMusic`).
+- **Graphics and SFX are procedural.** Sprites are drawn with Canvas paths + `shadowBlur` (see `drawBird`); sound effects are synthesized with the Web Audio API (`sfx`). There are no image assets.
+- **Music is three bundled mp3s** in `renderer/audio/` (`jst-intro` title, `jst-bg` level — both looping, `jst-ded` game-over — one-shot). `syncMusic()` runs each tick and swaps `curTrack` based on `state`; `musicOn` is the player's toggle (title-screen button + pause-menu item) while the `M` mute key silences everything. Two things make this work and must be preserved: `media-src 'self'` in the `index.html` CSP, and `autoplayPolicy: 'no-user-gesture-required'` in `main.js` webPreferences (otherwise Chromium blocks the title track until a click).
 - **Debug/automation handle.** `window.__joust` exposes state getters/setters and functions (`startGame`, `startWave`, `defeatEnemy`, `killPlayer`, …) for driving the game headlessly. Keep it in sync when adding gameplay you'll want to test.
 
 ### Collision note

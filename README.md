@@ -20,7 +20,11 @@ Grab the [desktop app](#desktop-app) for your platform, double-click, and the ga
 
 Flapping is a tap, not a hold — each press gives one upward beat, and gravity is always pulling you down. Gamepads are hot-pluggable.
 
-Pressing `Esc` during play opens a **pause menu** showing the high scores with **Continue**, **Restart Game**, and **Quit Game** — navigate with the arrows, mouse, or gamepad.
+Pressing `Esc` during play opens a **pause menu** showing the high scores with **Continue**, **Restart Game**, **Music: On/Off**, and **Quit Game** — navigate with the arrows, mouse, or gamepad.
+
+## Music
+
+The game has its own soundtrack: a title theme, looping level music, and a game-over track. Toggle it with the **MUSIC** button on the title screen or the **Music** item in the pause menu. (`M` mutes *all* audio, sound effects included.)
 
 ## How to play
 
@@ -52,7 +56,7 @@ Beat the tenth-place score and you'll enter your three initials on the game-over
 - Three enemy tiers with escalating aggression, plus a lava troll
 - Five power-ups
 - All-procedural neon visuals: glowing sprites, particle effects, screen shake, parallax background, bubbling lava, CRT scanlines
-- Runtime-synthesized sound and music via the Web Audio API (no audio files)
+- Runtime-synthesized sound effects (Web Audio API), plus a soundtrack — separate title, level, and game-over tracks — with a music on/off toggle
 - Keyboard **and** gamepad support throughout
 
 ## Desktop app
@@ -122,7 +126,8 @@ preload.js           contextBridge: exposes window.joustAPI to the game
 scores.js            flat-file high-score database (plain node, unit-tested)
 renderer/
   index.html         the app window shell (canvas + CSP)
-  game.js            the entire game (Canvas + Web Audio + Gamepad), procedural
+  game.js            the entire game (Canvas + Web Audio + Gamepad)
+  audio/             the three mp3 music tracks
 build/               electron-builder resources (entitlements, afterPack signing)
 test/scores.test.js  score-database tests (npm test)
 ```

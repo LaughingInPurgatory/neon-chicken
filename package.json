@@ -1,6 +1,6 @@
 {
   "name": "joust-neon-edition",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "A neon remake of the arcade classic Joust — a self-contained Electron desktop app with procedural graphics, synthesized sound, power-ups, and a flat-file high score table",
   "author": "schtufbox",
   "license": "MIT",

@@ -31,7 +31,9 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      // The title-screen track must start without a click; the app is local-only.
+      autoplayPolicy: 'no-user-gesture-required'
     }
   });
   Menu.setApplicationMenu(null);
