@@ -12,7 +12,10 @@ const path = require('node:path');
 const { createScoreDB } = require('./scores');
 
 const APP_TITLE = 'Neon-Chicken';
-const ICON = path.join(__dirname, 'flibble.jpg');
+// PNG for packaging; jpg kept as source art. Prefer png when present.
+const ICON = fs.existsSync(path.join(__dirname, 'build', 'icon.png'))
+  ? path.join(__dirname, 'build', 'icon.png')
+  : path.join(__dirname, 'flibble.jpg');
 const WIN_STATE = path.join(app.getPath('userData'), 'window.json');
 const DEFAULT_W = 1600, DEFAULT_H = 900;
 
