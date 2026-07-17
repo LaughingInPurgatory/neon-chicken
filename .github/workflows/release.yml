@@ -59,10 +59,10 @@ jobs:
           mkdir -p out
           # Ship only the installers (.dmg / .exe / .AppImage). Skip
           # electron-builder's combined multi-arch NSIS installer
-          # (joust-neon-edition-win.exe); we ship the per-arch installers instead.
+          # (neon-chicken-win.exe); we ship the per-arch installers instead.
           find dist -maxdepth 1 -type f \
             \( -name '*.dmg' -o -name '*.exe' -o -name '*.AppImage' \) \
-            ! -name 'joust-neon-edition-win.exe' \
+            ! -name 'neon-chicken-win.exe' \
             -exec cp {} out/ \;
           ls -la out
 
@@ -96,5 +96,5 @@ jobs:
         run: >
           gh release create "${GITHUB_REF_NAME}"
           release/*
-          --title "JOUST — Neon Edition ${GITHUB_REF_NAME}"
+          --title "Neon-Chicken ${GITHUB_REF_NAME}"
           --generate-notes

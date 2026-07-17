@@ -7,7 +7,7 @@
  */
 const { contextBridge, ipcRenderer } = require('electron');
 
-contextBridge.exposeInMainWorld('joustAPI', {
+contextBridge.exposeInMainWorld('neonChickenAPI', {
   getScores: () => ipcRenderer.invoke('scores:get'),
   addScore: (name, score) => ipcRenderer.invoke('scores:add', { name, score }),
   quit: () => ipcRenderer.send('app:quit') // Quit button -> exit the app

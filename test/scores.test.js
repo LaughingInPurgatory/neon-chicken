@@ -10,7 +10,7 @@ let passed = 0;
 function ok(cond, msg) { assert.ok(cond, msg); passed++; }
 
 async function main() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'joust-scores-test-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'neon-chicken-scores-test-'));
   const file = path.join(dir, 'scores.txt');
   const db = createScoreDB(file, 3); // small cap to exercise truncation
 

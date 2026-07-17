@@ -1,6 +1,6 @@
-# JOUST — Neon Edition
+# Neon-Chicken
 
-A modern remake of the 1982 Atari arcade classic **Joust**, as a self-contained neon desktop app. Flap your neon mount to gain height, ram enemy riders from above to unhorse them, collect the eggs they drop before they hatch, and survive wave after wave over a sea of lava.
+A neon arcade flyer as a self-contained desktop app. Flap your mount to gain height, ram enemy riders from above to unhorse them, collect the eggs they drop before they hatch, and survive wave after wave over a sea of lava. (Inspired by the 1982 classic *Joust*.)
 
 Built with Electron: the game (HTML5 Canvas + Web Audio, all procedural) runs in the app window, and a tiny main process persists high scores to a plain-text file. No server, no browser to open — just run it.
 
@@ -28,7 +28,7 @@ The game has its own soundtrack: a title theme, looping level music, and a game-
 
 ## How to play
 
-- **Jousting:** when you collide with an enemy, whoever's rider is *higher* wins. Hit them from above to defeat them; get hit from above and you lose a life. Equal height bounces both riders apart.
+- **Combat:** when you collide with an enemy, whoever's rider is *higher* wins. Hit them from above to defeat them; get hit from above and you lose a life. Equal height bounces both riders apart.
 - **Eggs:** a defeated rider drops an egg. Grab it for bonus points (worth more in a streak) — but if you leave it too long it hatches into a faster, tougher rider.
 - **Waves:** wave 1 has 2 enemies, and each wave adds one more. A wave ends only when every enemy *and* every unhatched egg is gone.
 - **Lava:** the bottom of the arena is deadly. Fly too low and the lava troll's hand may grab you — mash flap to break free.
@@ -52,7 +52,7 @@ Beat the tenth-place score and you'll enter your three initials on the game-over
 
 ## Features
 
-- Faithful Joust flap physics, height-based combat, and eggs
+- Flap physics, height-based combat, and eggs
 - Three enemy tiers with escalating aggression, plus a lava troll
 - Five power-ups
 - All-procedural neon visuals: glowing sprites, particle effects, screen shake, parallax background, bubbling lava, CRT scanlines
@@ -80,7 +80,7 @@ npm run dist    # package installers into dist/
 | Windows (x64 + ARM) | `.exe` (NSIS) |
 | Linux (x64) | `.AppImage` |
 
-Each machine builds its own platform's artifacts (Electron apps can't fully cross-compile), so the full set is produced by CI — see [Automated releases](#automated-releases). High scores are saved to `scores.txt` in the OS's per-user app-data folder (e.g. `~/Library/Application Support/joust-neon-edition/` on macOS, `%APPDATA%` on Windows).
+Each machine builds its own platform's artifacts (Electron apps can't fully cross-compile), so the full set is produced by CI — see [Automated releases](#automated-releases). High scores are saved to `scores.txt` in the OS's per-user app-data folder (e.g. `~/Library/Application Support/neon-chicken/` on macOS, `%APPDATA%` on Windows).
 
 ### First launch (unsigned builds)
 
@@ -88,12 +88,12 @@ The released apps are **not** signed with a paid developer certificate (the macO
 
 - **macOS** — double-clicking shows "cannot be opened because the developer cannot be verified," and the window may not appear. Clear it once, either way:
   - **Right-click the app → Open → Open**, or
-  - in Terminal: `xattr -cr "/path/to/JOUST Neon Edition.app"` then open it normally.
+  - in Terminal: `xattr -cr "/path/to/Neon-Chicken.app"` then open it normally.
 - **Windows** — SmartScreen shows "Windows protected your PC." Click **More info → Run anyway**.
 
 After that first allow, it launches normally. To remove the warning entirely, the app needs code signing + notarization (see [Automated releases](#automated-releases)).
 
-**Runtime options:** set `JOUST_FULLSCREEN=1` to launch the window fullscreen.
+**Window:** default size is 1600×900; your last size/position is restored on next launch. **Alt+Enter** toggles fullscreen. **Cmd+Q** / **Ctrl+Q** quits (no application menu). Or set `NEON_CHICKEN_FULLSCREEN=1` to start fullscreen.
 
 ### Automated releases
 
@@ -122,7 +122,7 @@ The workflow ([.github/workflows/release.yml](.github/workflows/release.yml)) al
 
 ```
 main.js              Electron main process — window + high-score IPC + file I/O
-preload.js           contextBridge: exposes window.joustAPI to the game
+preload.js           contextBridge: exposes window.neonChickenAPI to the game
 scores.js            flat-file high-score database (plain node, unit-tested)
 renderer/
   index.html         the app window shell (canvas + CSP)
@@ -132,4 +132,4 @@ build/               electron-builder resources (entitlements, afterPack signing
 test/scores.test.js  score-database tests (npm test)
 ```
 
-The renderer is sandboxed (context isolation on, no Node access); its only bridge to the system is `window.joustAPI` for reading/saving scores. See [CLAUDE.md](CLAUDE.md) for architecture notes.
+The renderer is sandboxed (context isolation on, no Node access); its only bridge to the system is `window.neonChickenAPI` for reading/saving scores. See [AGENTS.md](AGENTS.md) for architecture notes.

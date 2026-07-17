@@ -1,7 +1,7 @@
 /*
- * JOUST — Neon Edition — game code (renderer process).
+ * Neon-Chicken — game code (renderer process).
  * Pure browser code: HTML5 Canvas + Web Audio + Gamepad API, all procedural.
- * High scores go through window.joustAPI (see preload.js), which talks to the
+ * High scores go through window.neonChickenAPI (see preload.js), which talks to the
  * Electron main process over IPC — there is no server.
  */
 (function () {
@@ -143,7 +143,7 @@ function pauseActivate() {
   if (id === 'continue') { closePause(); sfx.egg(); }
   else if (id === 'restart') { closePause(); startGame(); sfx.wave(); }
   else if (id === 'music') { toggleMusic(); }        // stays in the menu
-  else if (id === 'quit') { if (window.joustAPI && window.joustAPI.quit) window.joustAPI.quit(); }
+  else if (id === 'quit') { if (window.neonChickenAPI && window.neonChickenAPI.quit) window.neonChickenAPI.quit(); }
 }
 
 function getPad() {
@@ -269,9 +269,9 @@ function initMusic() {
     return a;
   }
   tracks = {
-    intro: mk('audio/jst-intro.mp3', true),
-    bg: mk('audio/jst-bg.mp3', true),   // level music — repeats if it ends
-    dead: mk('audio/jst-ded.mp3', false)
+    intro: mk('audio/intro.mp3', true),
+    bg: mk('audio/bg.mp3', true),   // level music — repeats if it ends
+    dead: mk('audio/dead.mp3', false)
   };
 }
 
@@ -302,14 +302,14 @@ function toggleMusic() {
 
 /* -------------------- high scores (client) -------------------- */
 function fetchScores() {
-  if (!window.joustAPI) return;
-  window.joustAPI.getScores()
+  if (!window.neonChickenAPI) return;
+  window.neonChickenAPI.getScores()
     .then(function (j) { if (Array.isArray(j)) hiscores = j; })
     .catch(function () {});
 }
 function postScore(name, sc) {
-  if (!window.joustAPI) return Promise.resolve();
-  return window.joustAPI.addScore(name, sc)
+  if (!window.neonChickenAPI) return Promise.resolve();
+  return window.neonChickenAPI.addScore(name, sc)
     .then(function (j) { if (Array.isArray(j)) hiscores = j; })
     .catch(function () {});
 }
@@ -386,8 +386,11 @@ function newEnemy(pad, tier) {
   return e;
 }
 
+var FLAP_ANIM_T = 0.28; // wing-beat duration (seconds)
+
 function applyPhysics(e, dt, accMul, maxMul) {
   e.px = e.x; e.py = e.y;
+  if (e.flapAnim > 0) e.flapAnim = Math.max(0, e.flapAnim - dt);
   e.vy += GRAV * dt;
   e.vy = clamp(e.vy, VY_MIN * (maxMul || 1), VY_MAX);
   e.vx = clamp(e.vx, -MAXVX * (maxMul || 1), MAXVX * (maxMul || 1));
@@ -416,7 +419,7 @@ function applyPhysics(e, dt, accMul, maxMul) {
 function flap(e, power) {
   e.vy += FLAP * (power || 1);
   if (e.vy < VY_MIN * (power || 1)) e.vy = VY_MIN * (power || 1);
-  e.flapAnim = 0.22;
+  e.flapAnim = FLAP_ANIM_T;
   featherFx(e.x + e.w / 2, e.y + e.h * 0.7, 3);
 }
 
@@ -439,10 +442,12 @@ function updatePlayer(dt) {
   var turbo = effects.turbo > 0;
   var acc = ACC * (turbo ? 1.6 : 1);
   if (troll.grab) {
-    // pinned by the lava troll — flap to escape!
+    // pinned by the lava troll — flap to escape! (no applyPhysics, so decay anim here)
+    if (p.flapAnim > 0) p.flapAnim = Math.max(0, p.flapAnim - dt);
     p.x = troll.x - p.w / 2; p.y = troll.y - p.h + 6;
     if (edge.flap) {
       sfx.flap(); troll.y -= 17; troll.escapes--;
+      p.flapAnim = FLAP_ANIM_T;
       featherFx(p.x + p.w / 2, p.y + p.h, 5);
       if (troll.escapes <= 0 || troll.y < LAVA_Y - 100) {
         troll.grab = false; troll.active = false;
@@ -461,8 +466,18 @@ function updatePlayer(dt) {
   applyPhysics(p, dt, 1, turbo ? 1.25 : 1);
   if (p.invuln > 0) p.invuln -= dt;
 
-  // lava
-  if (p.y + p.h >= LAVA_Y + 8) { killPlayer('lava'); return; }
+  // lava — shield bounces you up instead of dying
+  if (p.y + p.h >= LAVA_Y + 8) {
+    if (effects.shield > 0) {
+      p.y = LAVA_Y + 8 - p.h;
+      p.vy = Math.min(p.vy, -360);
+      burst(p.x + p.w / 2, LAVA_Y, '#00e5ff', 10, 140);
+      sfx.sizzle();
+    } else {
+      killPlayer('lava');
+      return;
+    }
+  }
 
   // lava troll watches for low fliers
   if (p.y + p.h > LAVA_Y - 62 && !p.onGround) lowT += dt; else lowT = Math.max(0, lowT - dt * 2);
@@ -562,7 +577,7 @@ function updateEnemy(e, dt) {
   if (e.y + e.h >= LAVA_Y + 6) { e.dead = 'lava'; sfx.sizzle(); burst(e.x + e.w / 2, LAVA_Y, '#ff6b00', 16, 130); }
 }
 
-function joustCollisions() {
+function combatCollisions() {
   var p = player;
   // enemy vs enemy: light bounce so they don't stack
   for (var a = 0; a < enemies.length; a++) {
@@ -588,7 +603,7 @@ function joustCollisions() {
         var push2 = p.x < e.x ? -1 : 1;
         e.vx = -push2 * 200; e.vy = -120;
       } else {
-        killPlayer('joust');
+        killPlayer('combat');
         return;
       }
     } else {
@@ -801,6 +816,29 @@ function startGame() {
   state = ST.PLAY; paused = false;
 }
 
+var CHICKEN_PUNS = [
+  'POULTRY IN MOTION',
+  'NO FOWL PLAY',
+  'WING IT OR LOSE IT',
+  'CLAWS OUT, LANCES UP',
+  'HARD-BOILED HEROICS',
+  'THE EARLY BIRD GETS THE LAVA',
+  'CLUTCH OR BUST',
+  'PECKING ORDER ENFORCED',
+  'COOP DE GRACE',
+  'EGGS-TREME SPORTS',
+  'FLAP HAPPENS',
+  'BIRD BRAIN, SHARP LANCE',
+  'FEATHER THE STORM',
+  'DON\'T COUNT YOUR CHICKENS',
+  'LANCE A LITTLE, WORRY LESS',
+  'FRIED IF YOU FLY LOW',
+  'A FOWL MOOD AWAITS',
+  'CHICKENS NEVER LOOK DOWN'
+];
+var titlePun = '';
+function pickTitlePun() { titlePun = pick(CHICKEN_PUNS); }
+
 function makeDemo() {
   makePlatforms(1);
   demo = [];
@@ -810,6 +848,7 @@ function makeDemo() {
     demo.push(e);
   }
   parts = []; texts = [];
+  pickTitlePun();
 }
 makeDemo();
 
@@ -833,7 +872,7 @@ function tick(dt) {
         }
         d.vx += d.dir * ACC * 0.6 * dt; d.facing = d.dir;
         d.flapCd -= dt;
-        if (d.wantFlap && d.flapCd <= 0) { d.flapCd = rnd(0.25, 0.5); d.vy += FLAP * 0.9; d.flapAnim = 0.22; }
+        if (d.wantFlap && d.flapCd <= 0) { d.flapCd = rnd(0.25, 0.5); d.vy += FLAP * 0.9; d.flapAnim = FLAP_ANIM_T; }
         applyPhysics(d, dt, 0.6, 0.75);
         if (d.y + d.h > LAVA_Y - 40) d.vy = Math.min(d.vy, -160);
       }
@@ -864,7 +903,7 @@ function tick(dt) {
         if (enemies[e2].dead) enemies.splice(e2, 1);
       }
       if (state !== ST.PLAY) { updateFx(dt); break; } // player may have died mid-update
-      joustCollisions();
+      combatCollisions();
       for (var g2 = eggs.length - 1; g2 >= 0; g2--) {
         updateEgg(eggs[g2], dt);
         if (eggs[g2].gone) eggs.splice(g2, 1);
@@ -968,6 +1007,33 @@ function nameGamepad() {
 }
 
 /* -------------------- rendering -------------------- */
+// Chicken wing: pivot at shoulder, tip trails back. ang 0 = horizontal-ish folded.
+function drawWing(ang, mount, alpha, scaleY) {
+  ctx.save();
+  ctx.translate(-1, 3);
+  ctx.rotate(ang);
+  ctx.scale(1, scaleY || 1);
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = mount;
+  ctx.beginPath();
+  // primary feather plate
+  ctx.moveTo(0, 0);
+  ctx.quadraticCurveTo(-8, -2, -16, 1);
+  ctx.quadraticCurveTo(-14, 7, -6, 6);
+  ctx.quadraticCurveTo(-2, 4, 0, 0);
+  ctx.fill();
+  // secondary feathers (stroke tips)
+  ctx.strokeStyle = mount;
+  ctx.lineWidth = 1.4;
+  ctx.globalAlpha = alpha * 0.85;
+  ctx.beginPath();
+  ctx.moveTo(-6, 1); ctx.lineTo(-18, -3);
+  ctx.moveTo(-5, 3); ctx.lineTo(-17, 2);
+  ctx.moveTo(-4, 5); ctx.lineTo(-15, 7);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawBird(o, mount, rider, alpha) {
   var cx = o.x + o.w / 2, cy = o.y + o.h / 2;
   ctx.save();
@@ -977,62 +1043,184 @@ function drawBird(o, mount, rider, alpha) {
   ctx.shadowColor = mount;
   ctx.shadowBlur = 14;
 
-  // legs
-  ctx.strokeStyle = mount;
-  ctx.lineWidth = 2.4;
-  var run = o.onGround && Math.abs(o.vx) > 20 ? Math.sin(o.runPh * 6) * 6 : 0;
+  // Wing beat: one full up-then-down stroke while flapAnim ticks down.
+  var rest = o.onGround ? 0.7 : 0.32 + Math.sin(time * 5 + o.x * 0.05) * 0.1;
+  var wingAng = rest;
+  if (o.flapAnim > 0) {
+    var p = 1 - o.flapAnim / FLAP_ANIM_T; // 0 at flap start → 1 at end
+    wingAng = rest - 1.55 * Math.sin(p * Math.PI); // peak raised mid-beat
+  }
+
+  // Far wing (behind body, slightly smaller / dimmer)
+  drawWing(wingAng * 0.9, mount, alpha * 0.5, 0.85);
+
+  // Chicken legs + feet
+  ctx.strokeStyle = '#ffe600';
+  ctx.lineWidth = 2.2;
+  ctx.lineCap = 'round';
+  var run = o.onGround && Math.abs(o.vx) > 20 ? Math.sin(o.runPh * 6) * 5 : 0;
+  var legY = 10;
   ctx.beginPath();
-  ctx.moveTo(-3, 8); ctx.lineTo(-5 + run, 17);
-  ctx.moveTo(4, 8); ctx.lineTo(6 - run, 17);
+  ctx.moveTo(-4, legY); ctx.lineTo(-6 + run, 18);
+  ctx.moveTo(-6 + run, 18); ctx.lineTo(-10 + run, 18); // foot
+  ctx.moveTo(3, legY); ctx.lineTo(5 - run, 18);
+  ctx.moveTo(5 - run, 18); ctx.lineTo(1 - run, 18);
   ctx.stroke();
 
-  // body
+  // Plump chicken body
   ctx.fillStyle = mount;
   ctx.beginPath();
-  ctx.ellipse(0, 4, 12, 8, 0, 0, Math.PI * 2);
+  ctx.ellipse(1, 5, 13, 9.5, -0.12, 0, Math.PI * 2);
   ctx.fill();
-  // tail
-  ctx.beginPath();
-  ctx.moveTo(-11, 3); ctx.lineTo(-19, -3); ctx.lineTo(-11, 8);
-  ctx.closePath(); ctx.fill();
-  // neck + head
-  ctx.lineWidth = 3.4;
-  ctx.beginPath(); ctx.moveTo(8, 2); ctx.quadraticCurveTo(13, -2, 14, -8); ctx.stroke();
-  ctx.beginPath(); ctx.arc(14.5, -9.5, 4, 0, Math.PI * 2); ctx.fill();
-  // beak
-  ctx.fillStyle = '#ffe600';
-  ctx.beginPath(); ctx.moveTo(17, -11); ctx.lineTo(25, -8.5); ctx.lineTo(17, -7); ctx.closePath(); ctx.fill();
-  // eye
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = '#05010f';
-  ctx.beginPath(); ctx.arc(15.5, -10, 1.3, 0, Math.PI * 2); ctx.fill();
-  ctx.shadowBlur = 14;
 
-  // wing
-  var wingAng = o.flapAnim > 0 ? -0.9 + (0.22 - o.flapAnim) * 8 : 0.35 + Math.sin(time * 4 + cx) * 0.06;
-  ctx.save();
-  ctx.translate(-2, 2);
-  ctx.rotate(wingAng);
-  ctx.fillStyle = mount;
-  ctx.globalAlpha = alpha * 0.9;
+  // Tail feathers (fanned)
   ctx.beginPath();
-  ctx.ellipse(-6, 0, 10, 4.5, 0, 0, Math.PI * 2);
+  ctx.moveTo(-11, 2);
+  ctx.quadraticCurveTo(-18, -6, -22, -2);
+  ctx.quadraticCurveTo(-19, 4, -14, 8);
+  ctx.quadraticCurveTo(-16, 2, -11, 4);
+  ctx.closePath();
   ctx.fill();
-  ctx.restore();
+  ctx.beginPath();
+  ctx.moveTo(-12, 5);
+  ctx.quadraticCurveTo(-20, 6, -21, 12);
+  ctx.quadraticCurveTo(-14, 10, -11, 7);
+  ctx.closePath();
+  ctx.fill();
+
+  // Neck
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = mount;
+  ctx.beginPath();
+  ctx.moveTo(10, 3);
+  ctx.quadraticCurveTo(15, 0, 16, -7);
+  ctx.stroke();
+
+  // Chicken head
+  ctx.fillStyle = mount;
+  ctx.beginPath();
+  ctx.ellipse(17, -9, 5.2, 4.6, 0.1, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Comb (red)
+  ctx.shadowBlur = 8;
+  ctx.shadowColor = '#ff3860';
+  ctx.fillStyle = '#ff3860';
+  ctx.beginPath();
+  ctx.moveTo(14, -12);
+  ctx.lineTo(15.5, -17);
+  ctx.lineTo(17.5, -13);
+  ctx.lineTo(19.5, -17.5);
+  ctx.lineTo(21, -12);
+  ctx.closePath();
+  ctx.fill();
+
+  // Wattle
+  ctx.beginPath();
+  ctx.ellipse(18.5, -5.5, 1.6, 2.4, 0.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Beak
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#ffe600';
+  ctx.beginPath();
+  ctx.moveTo(21, -10);
+  ctx.lineTo(28, -8);
+  ctx.lineTo(21, -6.5);
+  ctx.closePath();
+  ctx.fill();
+
+  // Eye
+  ctx.fillStyle = '#05010f';
+  ctx.beginPath();
+  ctx.arc(18.5, -10, 1.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#fffbe6';
+  ctx.beginPath();
+  ctx.arc(18.9, -10.4, 0.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Near wing (in front of body) — full flap stroke
+  ctx.shadowColor = mount;
+  ctx.shadowBlur = 12;
+  drawWing(wingAng, mount, alpha * 0.95, 1);
+
+  // --- Rider: man sitting on the chicken, lance forward ---
+  ctx.shadowColor = rider;
+  ctx.shadowBlur = 12;
   ctx.globalAlpha = alpha;
 
-  // rider
-  ctx.shadowColor = rider;
+  // Rider legs straddling the mount
+  ctx.strokeStyle = rider;
+  ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  ctx.moveTo(-2, -2); ctx.lineTo(-7, 6); // back leg
+  ctx.moveTo(2, -2); ctx.lineTo(6, 5);   // front leg
+  ctx.stroke();
+
+  // Torso
   ctx.fillStyle = rider;
-  ctx.fillRect(-4, -13, 7, 10); // torso
-  ctx.beginPath(); ctx.arc(-0.5, -16.5, 3.6, 0, Math.PI * 2); ctx.fill(); // head
-  ctx.fillStyle = mount; // helmet crest
-  ctx.fillRect(-3.5, -21.5, 6, 2.4);
-  // lance
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-5, -4);
+  ctx.lineTo(5, -4);
+  ctx.lineTo(4, -14);
+  ctx.lineTo(-4, -14);
+  ctx.closePath();
+  ctx.fill();
+
+  // Helmeted head
+  ctx.beginPath();
+  ctx.arc(0, -17.5, 4.2, 0, Math.PI * 2);
+  ctx.fill();
+  // Visor slit
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#05010f';
+  ctx.fillRect(-2.5, -18.5, 5, 1.4);
+  // Helmet crest
+  ctx.fillStyle = mount;
+  ctx.shadowColor = mount;
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.moveTo(-1, -21);
+  ctx.lineTo(0, -25);
+  ctx.lineTo(2, -21);
+  ctx.closePath();
+  ctx.fill();
+
+  // Arm holding lance
+  ctx.strokeStyle = rider;
+  ctx.lineWidth = 2.6;
+  ctx.shadowColor = rider;
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.moveTo(3, -11);
+  ctx.lineTo(10, -13);
+  ctx.stroke();
+
+  // Lance shaft + tip
+  ctx.strokeStyle = '#fffbe6';
+  ctx.lineWidth = 2.2;
   ctx.shadowColor = '#ffffff';
-  ctx.beginPath(); ctx.moveTo(1, -11); ctx.lineTo(19, -18); ctx.stroke();
+  ctx.shadowBlur = 10;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(4, -10);
+  ctx.lineTo(26, -20);
+  ctx.stroke();
+  // spear tip
+  ctx.fillStyle = '#fffbe6';
+  ctx.beginPath();
+  ctx.moveTo(26, -20);
+  ctx.lineTo(31, -22);
+  ctx.lineTo(26.5, -17);
+  ctx.closePath();
+  ctx.fill();
+  // hand grip
+  ctx.fillStyle = rider;
+  ctx.shadowBlur = 0;
+  ctx.beginPath();
+  ctx.arc(10, -13, 2, 0, Math.PI * 2);
+  ctx.fill();
 
   ctx.restore();
 }
@@ -1324,29 +1512,31 @@ function drawPauseMenu() {
     var b = pauseBtns[i], sel = i === pauseSel;
     drawButton(b, (sel ? '▸ ' : '') + pauseLabel(b), pauseColor(b), sel);
   }
-  neonText('↑ ↓ / MOUSE  SELECT      ENTER / CLICK  CHOOSE      ESC  RESUME', W / 2, 582, 11, '#8ea6ff');
+  neonText('↑ ↓ / MOUSE  SELECT      ENTER / A / CLICK  CHOOSE      ESC / B  RESUME', W / 2, 582, 11, '#8ea6ff');
 }
 
 function drawTitle() {
   var pulse = 0.75 + 0.25 * Math.sin(time * 2.4);
+  var title = 'Neon-Chicken';
+  // Sit above the top ledge (platform y=118), not on it.
   ctx.save();
-  ctx.translate(W / 2, 120);
-  ctx.font = 'bold 92px "Courier New", monospace';
+  ctx.translate(W / 2, 72);
+  ctx.font = 'bold 58px "Courier New", monospace';
   ctx.textAlign = 'center';
   // chromatic ghost layers
   ctx.globalAlpha = 0.5;
   ctx.fillStyle = '#ff2d95';
-  ctx.fillText('JOUST', -3, 0);
+  ctx.fillText(title, -3, 0);
   ctx.fillStyle = '#00e5ff';
-  ctx.fillText('JOUST', 3, 0);
+  ctx.fillText(title, 3, 0);
   ctx.globalAlpha = 1;
   ctx.shadowColor = '#ffe600';
   ctx.shadowBlur = 30 * pulse;
   ctx.fillStyle = '#fffbe6';
-  ctx.fillText('JOUST', 0, 0);
+  ctx.fillText(title, 0, 0);
   ctx.shadowBlur = 0;
   ctx.restore();
-  neonText('· N E O N   E D I T I O N ·', W / 2, 152, 17, '#a855f7');
+  neonText(titlePun || 'POULTRY IN MOTION', W / 2, 98, 15, '#a855f7');
 }
 
 function drawIntro() {
@@ -1357,10 +1547,11 @@ function drawIntro() {
   drawTitle();
   drawScoreTable(205);
   if (Math.sin(time * 4) > -0.3) {
-    neonText('PRESS FLAP TO START', W / 2, 505, 22, '#00e5ff');
+    neonText('PRESS SPACE / ENTER TO START', W / 2, 500, 20, '#00e5ff');
   }
-  neonText('KEYS: ARROWS / A D MOVE · SPACE FLAP · ESC PAUSE · M MUTE', W / 2, 532, 12, '#8ea6ff');
-  neonText('GAMEPAD: STICK MOVE · A FLAP · START PAUSE', W / 2, 550, 12, '#8ea6ff');
+  // Matches pollInput() + pause handlers (Esc/P, Start)
+  neonText('KEYS: ← → / A D MOVE · SPACE ↑ W FLAP · ENTER START · ESC / P PAUSE · M MUTE', W / 2, 528, 11, '#8ea6ff');
+  neonText('GAMEPAD: STICK / D-PAD MOVE · A FLAP · START PAUSE', W / 2, 548, 11, '#8ea6ff');
   drawButton(musicBtn, 'MUSIC: ' + (musicOn ? 'ON' : 'OFF'),
              musicOn ? '#00ff88' : '#8ea6ff', musicHover);
 }
@@ -1462,7 +1653,7 @@ function render() {
     if (bannerT > 0 && state === ST.PLAY) {
       ctx.globalAlpha = clamp(bannerT / 0.4, 0, 1);
       neonText(bannerMsg, W / 2, 260, 54, '#ffe600');
-      neonText(wave === 1 ? 'PREPARE TO JOUST' : 'THEY GROW STRONGER…', W / 2, 300, 17, '#ff2d95');
+      neonText(wave === 1 ? 'PREPARE TO FLAP' : 'THEY GROW STRONGER…', W / 2, 300, 17, '#ff2d95');
       ctx.globalAlpha = 1;
     }
     if (state === ST.WAVECLEAR) {
@@ -1479,7 +1670,7 @@ function render() {
       ctx.fillStyle = 'rgba(4,1,14,0.6)';
       ctx.fillRect(0, 0, W, H);
       neonText('PAUSED', W / 2, 290, 52, '#00e5ff');
-      neonText('ESC / START TO RESUME', W / 2, 330, 16, '#8ea6ff');
+      neonText('ESC / P / START TO RESUME', W / 2, 330, 16, '#8ea6ff');
     }
     if (troll.grab) {
       neonText('FLAP! FLAP! FLAP!', W / 2, 220, 30, '#ff7b00');
@@ -1513,7 +1704,7 @@ function frame(tms) {
 requestAnimationFrame(frame);
 
 // expose a handle for debugging / automated playtesting
-window.__joust = {
+window.__neonChicken = {
   get state() { return state; },
   set state(v) { state = v; },
   ST: ST,

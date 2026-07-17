@@ -1,7 +1,7 @@
 {
-  "name": "joust-neon-edition",
+  "name": "neon-chicken",
   "version": "2.1.0",
-  "description": "A neon remake of the arcade classic Joust — a self-contained Electron desktop app with procedural graphics, synthesized sound, power-ups, and a flat-file high score table",
+  "description": "Neon-Chicken — a self-contained Electron desktop arcade game with procedural graphics, synthesized sound, power-ups, and a flat-file high score table",
   "author": "LaughingInPurgatory",
   "license": "MIT",
   "main": "main.js",
@@ -12,14 +12,16 @@
     "test": "node test/scores.test.js"
   },
   "build": {
-    "appId": "com.schtufbox.joust",
-    "productName": "JOUST Neon Edition",
-    "artifactName": "joust-neon-edition-${os}-${arch}.${ext}",
+    "appId": "com.schtufbox.neon-chicken",
+    "productName": "Neon-Chicken",
+    "artifactName": "neon-chicken-${os}-${arch}.${ext}",
+    "icon": "flibble.jpg",
     "afterPack": "./build/afterPack.js",
     "files": [
       "main.js",
       "preload.js",
       "scores.js",
+      "flibble.jpg",
       "renderer/**/*",
       "package.json"
     ],
