@@ -1,5 +1,9 @@
 # Neon-Chicken
 
+<p align="center">
+  <img src="build/icon.png" alt="Neon-Chicken icon" width="160" height="160">
+</p>
+
 A neon arcade flyer as a self-contained desktop app. Flap your mount to gain height, ram enemy riders from above to unhorse them, collect the eggs they drop before they hatch, and survive wave after wave over a sea of lava. (Inspired by the 1982 classic *Joust*.)
 
 Built with Electron: the game (HTML5 Canvas + Web Audio, all procedural) runs in the app window, and a tiny main process persists high scores to a plain-text file. No server, no browser to open — just run it.
