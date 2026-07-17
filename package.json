@@ -1,6 +1,6 @@
 {
   "name": "neon-chicken",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Neon-Chicken — a self-contained Electron desktop arcade game with procedural graphics, synthesized sound, power-ups, and a flat-file high score table",
   "author": "LaughingInPurgatory",
   "license": "MIT",
